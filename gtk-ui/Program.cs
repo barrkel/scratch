@@ -1,57 +1,38 @@
 ﻿using System;
 using Gtk;
+using Barrkel.ScratchPad;
+using System.Collections.Generic;
+using System.IO;
 
-public class GtkHelloWorld
+namespace Barrkel.GtkScratchPad
 {
-	public static void Main()
+	static class Program
 	{
-		Application.Init();
-
-		Window mainWindow = new Window("GTK ScratchPad");
-		mainWindow.Resize(600, 600);
-
-		Label tabLabel = new Label();
-		tabLabel.Text = "First Tab";
-		
-		TextView text = new TextView { WrapMode = WrapMode.Word };
-		text.Buffer.Text = "Hello there";
-
-		ScrolledWindow scrolled = new ScrolledWindow();
-		scrolled.Add(text);
-
-		Frame frame = new Frame();
-		frame.Add(scrolled);
-		
-		Notebook notebook = new Notebook();
-		notebook.AppendPage(frame, tabLabel);
-
-		Label location = new Label
+		public static int Main(string[] args)
 		{
-			Text = "Some Location",
-			Justify = Justification.Left,
-			Wrap = true,
-		};
-		location.SetAlignment(0, 0);
-		location.SetPadding(20, 20);
+			string settingsFile = Path.ChangeExtension(Environment.GetCommandLineArgs()[0], ".settings");
+			Settings settings;
+			if (File.Exists(settingsFile))
+				using (TextReader reader = File.OpenText(settingsFile))
+					settings = new Settings(reader);
+			else
+				settings = new Settings();
+			
+			Application.Init("GtkScratchPad", ref args);
+			
+			if (args.Length != 1)
+			{
+				Console.WriteLine("Expected argument: storage directory");
+				return 1;
+			}
 
-		VBox box = new VBox();
-		box.PackStart(notebook, true, true, 0);
-		box.PackEnd(location, false, false, 0);
-		
-		mainWindow.Add(box);
-		
-		mainWindow.ShowAll();
-
-		mainWindow.Destroyed += (o, e) => { Application.Quit(); };
-
-		mainWindow.KeyPressEvent += new KeyPressEventHandler(myWin_KeyPressEvent);
-		
-		Application.Run();
-	}
-
-	static void myWin_KeyPressEvent(object o, KeyPressEventArgs args)
-	{
-		Console.WriteLine(args.Event.Key);
-		Console.WriteLine(args.Event.State);
+			ScratchRoot root = new ScratchRoot(args[0]);
+			MainWindow window = new MainWindow(root, settings);
+			window.ShowAll();
+			
+			Application.Run();
+			return 0;
+		}
 	}
 }
+
