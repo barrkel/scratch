@@ -16,10 +16,6 @@ namespace Barrkel.GtkScratchPad
 			InitComponent();
 		}
 		
-		private void FullUpdateView()
-		{
-		}
-		
 		public Settings AppSettings { get; private set; }
 		public ScratchRoot Root { get; private set; }
 		
@@ -37,6 +33,8 @@ namespace Barrkel.GtkScratchPad
 				viewLabel.SetPadding(10, 2);
 				_notebook.AppendPage(view, viewLabel);
 			}
+			
+			Gtk.MessageDialog
 			
 			Add(_notebook);
 			
