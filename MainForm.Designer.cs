@@ -1,4 +1,4 @@
-﻿namespace Barrkel.ScratchPad
+namespace Barrkel.ScratchPad
 {
 	partial class MainForm
 	{

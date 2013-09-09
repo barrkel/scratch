@@ -1,4 +1,4 @@
-﻿using Gtk;
+using Gtk;
 using Barrkel.ScratchPad;
 using System;
 using System.Collections.Generic;
