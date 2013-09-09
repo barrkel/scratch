@@ -207,8 +207,11 @@ namespace Barrkel.GtkScratchPad
 
 		void _textView_KeyPressEvent(object o, KeyPressEventArgs args)
 		{
-			// Console.WriteLine("State = {0} Key = {1}", args.Event.State, args.Event.Key);
-			if (args.Event.State == Gdk.ModifierType.Mod1Mask)
+			// Mod1 => alt
+			var state = args.Event.State & (Gdk.ModifierType.ShiftMask | 
+				Gdk.ModifierType.Mod1Mask | Gdk.ModifierType.ControlMask);
+				
+			if (state == Gdk.ModifierType.Mod1Mask)
 			{
 				switch (args.Event.Key)
 				{

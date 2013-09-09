@@ -46,11 +46,11 @@ namespace Barrkel.GtkScratchPad
 					view.EnsureSaved();
 				Application.Quit();
 			};
-			
-			KeyPressEvent += (sender, args) => {
-				Console.WriteLine(args.Event.Key);
-				Console.WriteLine(args.Event.State);
-			};
+
+			//KeyPressEvent += (sender, args) =>
+			//{
+			//    Console.WriteLine("Key = {0}, State = {1}", args.Event.Key, args.Event.State);
+			//};
 		}
 	}
 }
