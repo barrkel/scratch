@@ -33,11 +33,9 @@ namespace Barrkel.GtkScratchPad
 				viewLabel.SetPadding(10, 2);
 				_notebook.AppendPage(view, viewLabel);
 			}
-			
-			Gtk.MessageDialog
-			
+
 			Add(_notebook);
-			
+
 			Destroyed += (o, e) =>
 			{
 				foreach (var view in views)
@@ -45,10 +43,22 @@ namespace Barrkel.GtkScratchPad
 				Application.Quit();
 			};
 
-			//KeyPressEvent += (sender, args) =>
-			//{
-			//    Console.WriteLine("Key = {0}, State = {1}", args.Event.Key, args.Event.State);
-			//};
+			KeyPressEvent += (sender, args) =>
+			{
+				BookView currentView = _notebook.CurrentPageWidget as BookView;
+				if (currentView == null)
+					return;
+
+				if (args.Event.State == Gdk.ModifierType.None)
+				{
+					switch (args.Event.Key)
+					{
+						case Gdk.Key.F12:
+							TitleSearchWindow.RunSearch(this, currentView.Book, AppSettings);
+							break;
+					}
+				}
+			};
 		}
 	}
 }
