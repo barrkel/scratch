@@ -1,0 +1,10 @@
+#!/bin/bash
+
+gmcs -r:/usr/lib/cli/gtk-sharp-2.0/gtk-sharp.dll \
+	-r:/usr/lib/cli/gdk-sharp-2.0/gdk-sharp.dll \
+	-r:/usr/lib/cli/glib-sharp-2.0/glib-sharp.dll \
+	-r:/usr/lib/cli/pango-sharp-2.0/pango-sharp.dll \
+	-o gtkscratch.exe \
+	*.cs || exit
+
+mono --runtime=v4.0 gtkscratch.exe .

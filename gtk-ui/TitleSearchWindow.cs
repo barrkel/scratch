@@ -106,7 +106,7 @@ namespace Barrkel.GtkScratchPad
 			
 			_searchTextView = new TextView();
 			_searchTextView.ModifyBase(StateType.Normal, lightBlue);
-			//_searchTextView.Buffer.Changed += _text_TextChanged;
+			_searchTextView.Buffer.Changed += (s, e) => { UpdateSearchBox(); };
 			_searchTextView.KeyPressEvent += _searchTextView_KeyPressEvent;
 			_searchTextView.ModifyFont(textFont);
 			_searchTextView.Buffer.Text = "";
@@ -233,10 +233,6 @@ namespace Barrkel.GtkScratchPad
 							selectedIndex = _searchResultsStoreCount - 1;
 						SelectedIndex = selectedIndex;
 					}
-					break;
-				
-				default:
-					UpdateSearchBox();
 					break;
 			}
 		}

@@ -48,8 +48,9 @@ namespace Barrkel.GtkScratchPad
 				BookView currentView = _notebook.CurrentPageWidget as BookView;
 				if (currentView == null)
 					return;
-
-				if (args.Event.State == Gdk.ModifierType.None)
+				var state = args.Event.State & (Gdk.ModifierType.ShiftMask | Gdk.ModifierType.Mod1Mask | 
+					Gdk.ModifierType.ControlMask);
+				if (state == Gdk.ModifierType.None)
 				{
 					switch (args.Event.Key)
 					{
