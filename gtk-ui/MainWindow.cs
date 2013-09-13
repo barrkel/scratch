@@ -54,7 +54,9 @@ namespace Barrkel.GtkScratchPad
 					switch (args.Event.Key)
 					{
 						case Gdk.Key.F12:
-							TitleSearchWindow.RunSearch(this, currentView.Book, AppSettings);
+							int found = TitleSearchWindow.RunSearch(this, currentView.Book, AppSettings);
+							if (found >= 0)
+								currentView.JumpToPage(found);
 							break;
 					}
 				}

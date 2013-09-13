@@ -66,6 +66,7 @@ namespace Barrkel.GtkScratchPad
 		TextView _searchTextView;
 		TreeView _searchResultsView;
 		ListStore _searchResultsStore;
+		int _searchResultsStoreCount; // asinine results store
 		
 		public TitleSearchWindow(ScratchBook book, Settings appSettings) : base("GTK ScratchPad")
 		{
@@ -81,7 +82,7 @@ namespace Barrkel.GtkScratchPad
 				switch (window.ShowModal(parent))
 				{
 					case ModalResult.OK:
-						return 0;
+						return window.SelectedItem.Value;
 
 					default:
 						return -1;
@@ -107,14 +108,11 @@ namespace Barrkel.GtkScratchPad
 			_searchTextView.ModifyBase(StateType.Normal, lightBlue);
 			//_searchTextView.Buffer.Changed += _text_TextChanged;
 			_searchTextView.KeyPressEvent += _searchTextView_KeyPressEvent;
-			//_searchTextView.KeyPressEvent += _searchTextView_KeyPressEvent;
 			_searchTextView.ModifyFont(textFont);
-			_searchTextView.Buffer.Text = "Foo Bar Baz";
+			_searchTextView.Buffer.Text = "";
 
 			
 			_searchResultsStore = new ListStore(typeof(TitleSearchResult));
-			for (int i = 0; i < 50; ++i)
-				_searchResultsStore.SetValue(_searchResultsStore.Append(), 0, new TitleSearchResult("Item " + i, i));
 			
 			_searchResultsView = new TreeView(_searchResultsStore);
 			TreeViewColumn column = new TreeViewColumn();
@@ -141,20 +139,71 @@ namespace Barrkel.GtkScratchPad
 			Add(vbox);
 			
 			BorderWidth = 5;
+
+			UpdateSearchBox();
+		}
+
+		private void UpdateSearchBox()
+		{
+			_searchResultsStore.Clear();
+			_searchResultsStoreCount = 0;
+			
+			foreach (var m in Book.SearchTitles(_searchTextView.Buffer.Text))
+			{
+				_searchResultsStore.SetValue(_searchResultsStore.Append(), 0, 
+					new TitleSearchResult(m.Key, _searchResultsStoreCount, m.Value));
+				++_searchResultsStoreCount;
+				
+				if (_searchResultsStoreCount >= 100)
+					break;
+			}
+			if (_searchResultsStoreCount == 1)
+				SelectedIndex = 0;
+			else
+				SelectedIndex = -1;
+		}
+		
+		public int SelectedIndex
+		{
+			get
+			{
+				TreeIter iter;
+				if (_searchResultsView.Selection.GetSelected(out iter))
+					return ((TitleSearchResult) _searchResultsStore.GetValue(iter, 0)).Index;
+				return -1;
+			}
+			set
+			{
+				var selection = _searchResultsView.Selection;
+				if (value < 0 || value >= _searchResultsStoreCount)
+				{
+					selection.UnselectAll();
+					return;
+				}
+				
+				TreeIter iter;
+				if (!_searchResultsStore.IterNthChild(out iter, value))
+					return;
+				
+				selection.SelectIter(iter);
+			}
+		}
+		
+		internal TitleSearchResult SelectedItem
+		{
+			get
+			{
+				TreeIter iter;
+				if (_searchResultsView.Selection.GetSelected(out iter))
+					return (TitleSearchResult) _searchResultsStore.GetValue(iter, 0);
+				return null;
+			}
 		}
 
 		[GLib.ConnectBefore]
 		void _searchTextView_KeyPressEvent(object o, KeyPressEventArgs args)
 		{
-			TreeSelection selection = _searchResultsView.Selection;
-			Console.WriteLine("mode: {0}", selection.Mode);
-			Console.WriteLine("count: {0}", selection.CountSelectedRows());
-			TreeIter iter;
-			if (selection.GetSelected(out iter))
-			{
-				object value = _searchResultsStore.GetValue(iter, 0);
-				Console.WriteLine("value: {0}", value);
-			}
+			int selectedIndex = SelectedIndex;
 			
 			switch (args.Event.Key)
 			{
@@ -164,13 +213,30 @@ namespace Barrkel.GtkScratchPad
 					break;
 					
 				case Gdk.Key.Up:
-					Console.WriteLine("up");
+					// FIXME: make these things scroll the selection into view
 					args.RetVal = true;
+					if (_searchResultsStoreCount > 0)
+					{
+						--selectedIndex;
+						if (selectedIndex <= 0)
+							selectedIndex = 0;
+						SelectedIndex = selectedIndex;
+					}
 					break;
 					
 				case Gdk.Key.Down:
-					Console.WriteLine("down");
 					args.RetVal = true;
+					if (_searchResultsStoreCount > 0)
+					{
+						++selectedIndex;
+						if (selectedIndex >= _searchResultsStoreCount)
+							selectedIndex = _searchResultsStoreCount - 1;
+						SelectedIndex = selectedIndex;
+					}
+					break;
+				
+				default:
+					UpdateSearchBox();
 					break;
 			}
 		}
@@ -178,20 +244,22 @@ namespace Barrkel.GtkScratchPad
 		[GLib.ConnectBefore]
 		void _searchResultsView_ButtonPressEvent(object o, ButtonPressEventArgs args)
 		{
-			Console.WriteLine("press {0}", args.Event.Type);
+			// consider handling double-click
 		}
 	}
 	
 	class TitleSearchResult
 	{
-		public TitleSearchResult(string title, int index)
+		public TitleSearchResult(string title, int index, int value)
 		{
 			Title = title;
 			Index = index;
+			Value = value;
 		}
 		
 		public string Title { get; private set; }
 		public int Index { get; private set; }
+		public int Value { get; private set; }
 
 		public override string ToString()
 		{
