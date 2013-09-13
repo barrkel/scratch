@@ -1,4 +1,5 @@
 ScratchPad for Windows and Mono
+===========
 
 Simple keyboard-driven scratchpad application with two implemented UIs, one
 WinForms, the other Gtk#.
