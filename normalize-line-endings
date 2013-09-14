@@ -1,0 +1,5 @@
+#!/bin/bash
+
+cd "$(dirname $0)"
+
+find | egrep '.*\.(cs|csproj|sln)$' | xargs dos2unix >/dev/null 2>/dev/null
