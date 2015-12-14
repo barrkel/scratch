@@ -90,6 +90,7 @@ namespace Barrkel.ScratchPad
 			this._text.Dock = System.Windows.Forms.DockStyle.Fill;
 			this._text.Font = new System.Drawing.Font("Consolas", 9.75F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
 			this._text.Location = new System.Drawing.Point(0, 25);
+			this._text.MaxLength = 0;
 			this._text.Multiline = true;
 			this._text.Name = "_text";
 			this._text.ScrollBars = System.Windows.Forms.ScrollBars.Both;
