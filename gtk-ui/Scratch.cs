@@ -60,11 +60,13 @@ namespace Barrkel.ScratchPad
 		List<ScratchPage> _pages = new List<ScratchPage>();
 		ReadOnlyCollection<ScratchPage> _pageCollection;
 		string _rootDirectory;
+		bool _unixLineEndings;
 		
 		public ScratchBook(string rootDirectory)
 		{
 			_pageCollection = new ReadOnlyCollection<ScratchPage>(_pages);
 			_rootDirectory = rootDirectory;
+			_unixLineEndings = File.Exists(Path.Combine(rootDirectory, ".unix"));
 			var root = new DirectoryInfo(rootDirectory);
 			_pages.AddRange(root.GetFiles("*.txt")
 				.Union(root.GetFiles("*.log"))
@@ -74,6 +76,8 @@ namespace Barrkel.ScratchPad
 				.Select(name => new ScratchPage(name)));
 		}
 		
+		public bool UnixLineEndings { get { return _unixLineEndings; } }
+
 		static bool DoesBaseNameExist(string baseName)
 		{
 			string logFile = Path.ChangeExtension(baseName, ".log");
