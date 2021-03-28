@@ -16,7 +16,7 @@ namespace Barrkel.GtkScratchPad
 		}
 	}
 	
-	public class BookView : Frame
+	public class BookView : Frame, ITextViewController
 	{
 		DateTime _lastModification;
 		DateTime _lastSave;
@@ -31,6 +31,7 @@ namespace Barrkel.GtkScratchPad
 		Label _dateLabel;
 		Label _pageLabel;
 		Label _versionLabel;
+		List<System.Action> _deferred = new List<System.Action>();
 		
 		public BookView(ScratchBook book, Settings appSettings)
 		{
@@ -203,6 +204,25 @@ namespace Barrkel.GtkScratchPad
 			Add(outerVertical);
 			
 			BorderWidth = 5;
+
+		}
+
+		void Defer(System.Action action)
+		{
+			_deferred.Add(action);
+			GLib.Idle.Add(DrainDeferred);
+		}
+
+		bool DrainDeferred()
+		{
+			if (_deferred.Count == 0)
+				return false;
+
+			System.Action defer = _deferred[_deferred.Count - 1];
+			_deferred.RemoveAt(_deferred.Count - 1);
+			defer();
+
+			return true;
 		}
 
 		void _textView_KeyPressEvent(object o, KeyPressEventArgs args)
@@ -210,34 +230,55 @@ namespace Barrkel.GtkScratchPad
 			// Mod1 => alt
 			var state = args.Event.State & (Gdk.ModifierType.ShiftMask | 
 				Gdk.ModifierType.Mod1Mask | Gdk.ModifierType.ControlMask);
-				
-			if (state == Gdk.ModifierType.Mod1Mask)
+			
+			switch (state)
 			{
-				switch (args.Event.Key)
-				{
-					case Gdk.Key.Home:
-					case Gdk.Key.Up:
-						PreviousVersion();
-						break;
+				case Gdk.ModifierType.Mod1Mask:
+					switch (args.Event.Key)
+					{
+						case Gdk.Key.Home:
+						case Gdk.Key.Up:
+							PreviousVersion();
+							break;
 						
-					case Gdk.Key.End:
-					case Gdk.Key.Down:
-						NextVersion();
-						break;
+						case Gdk.Key.End:
+						case Gdk.Key.Down:
+							NextVersion();
+							break;
 						
-					case Gdk.Key.Page_Up:
-					case Gdk.Key.Left:
-						PreviousPage();
-						break;
+						case Gdk.Key.Page_Up:
+						case Gdk.Key.Left:
+							PreviousPage();
+							break;
 						
-					case Gdk.Key.Page_Down:
-					case Gdk.Key.Right:
-						NextPage();
-						break;
-						
-					default:
-						return;
-				}
+						case Gdk.Key.Page_Down:
+						case Gdk.Key.Right:
+							NextPage();
+							break;
+
+						default:
+							return;
+					}
+					break;
+
+				case Gdk.ModifierType.ShiftMask:
+					switch (args.Event.Key)
+					{
+						case Gdk.Key.F4:
+							InsertText(DateTime.Now.ToString("yyyy-MM-dd HH:mm"));
+							break;
+					}
+					break;
+
+				case 0:
+					ITextViewController v = this;
+					switch (args.Event.Key)
+					{
+						case Gdk.Key.F4:
+							InsertText(DateTime.Today.ToShortDateString());
+							break;
+					}
+					break;
 			}
 		}
 
@@ -295,6 +336,10 @@ namespace Barrkel.GtkScratchPad
 			if (_currentIterator.MovePrevious())
 			{
 				UpdateTextBox();
+				SetSelection(_currentIterator.UpdatedFrom, _currentIterator.UpdatedTo);
+				// This scroll needs to be deferred to the idle loop
+				// the UI hasn't updated yet and the scroll command is effectively discarded
+				SetScrollPos(_currentIterator.UpdatedFrom);
 				UpdateViewLabels();
 			}
 		}
@@ -309,6 +354,8 @@ namespace Barrkel.GtkScratchPad
 			if (_currentIterator.MoveNext())
 			{
 				UpdateTextBox();
+				SetSelection(_currentIterator.UpdatedFrom, _currentIterator.UpdatedTo);
+				SetScrollPos(_currentIterator.UpdatedFrom);
 				UpdateViewLabels();
 			}
 		}
@@ -348,7 +395,48 @@ namespace Barrkel.GtkScratchPad
 			UpdateTitle();
 			UpdateViewLabels();
 		}
-		
+
+		public void InsertText(string text)
+		{
+			_textView.Buffer.InsertAtCursor(text);
+		}
+
+		public void SetScrollPos(int pos)
+		{
+			Defer(() =>
+			{
+				TextIter iter = _textView.Buffer.GetIterAtOffset(pos);
+				_textView.ScrollToIter(iter, 0, false, 0, 0);
+			});
+		}
+
+		public void SetSelection(int from, int to)
+		{
+			// hack: just highlight first few characters
+			to = from + 4;
+			if (from > to)
+			{
+				int t = from;
+				from = to;
+				to = t;
+			}
+			if (from == to)
+			{
+				to = from + 1;
+			}
+			_textView.Buffer.MoveMark("insert", _textView.Buffer.GetIterAtOffset(from));
+			_textView.Buffer.MoveMark("selection_bound", _textView.Buffer.GetIterAtOffset(to));
+		}
+
+		public int CurrentPosition 
+		{
+			get { return _textView.Buffer.CursorPosition; }
+			set
+			{
+				_textView.Buffer.MoveMark("insert", _textView.Buffer.GetIterAtOffset(value));
+			}
+		}
+
 		public ScratchBook Book
 		{
 			get; private set;

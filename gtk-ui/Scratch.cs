@@ -8,6 +8,18 @@ using System.Text.RegularExpressions;
 
 namespace Barrkel.ScratchPad
 {
+	public interface ITextViewController
+	{
+		// Inserts text at CurrentPosition
+		void InsertText(string text);
+		// Gets 0-based position in text
+		int CurrentPosition { get; set; }
+		// Sets both position and selection, highlighting the text
+		void SetSelection(int from, int to);
+		// Ensures position is scrolled into view
+		void SetScrollPos(int pos);
+	}
+
 	// The main root. Every directory in this directory is a tab on the main interface, like a separate
 	// notebook.
 	// Every file in this directory is in the main notebook.
@@ -537,7 +549,7 @@ namespace Barrkel.ScratchPad
 				try
 				{
 					ScratchUpdate up = ScratchUpdate.Load(source);
-					_text = up.Apply(_text);
+					_text = up.Apply(_text, out _, out _);
 					_updates.Add(up);
 				}
 				catch (EndOfStreamException)
@@ -607,6 +619,8 @@ namespace Barrkel.ScratchPad
 		// update to be applied to move forward. If at _updates.Count, then
 		// is at end.
 		int _position;
+		int _updatedFrom;
+		int _updatedTo;
 		
 		internal ScratchIterator(List<ScratchUpdate> updates)
 		{
@@ -653,7 +667,7 @@ namespace Barrkel.ScratchPad
 		{
 			if (_position >= _updates.Count)
 				return false;
-			Text = _updates[_position].Apply(Text);
+			Text = _updates[_position].Apply(Text, out _updatedFrom, out _updatedTo);
 			++_position;
 			return true;
 		}
@@ -662,11 +676,14 @@ namespace Barrkel.ScratchPad
 		{
 			if (_position <= 0)
 				return false;
-			Text = _updates[_position - 1].Revert(Text);
+			Text = _updates[_position - 1].Revert(Text, out _updatedFrom, out _updatedTo);
 			--_position;
 			return true;
 		}
 		
+		public int UpdatedFrom { get => _updatedFrom; }
+		public int UpdatedTo { get => _updatedTo; }
+
 		public int Count
 		{
 			get { return _updates.Count; }
@@ -710,8 +727,8 @@ namespace Barrkel.ScratchPad
 		{
 		}
 		
-		public abstract string Apply(string oldText);
-		public abstract string Revert(string newText);
+		public abstract string Apply(string oldText, out int from, out int to);
+		public abstract string Revert(string newText, out int from, out int to);
 		
 		public virtual void Save(Action<string> sink)
 		{
@@ -900,17 +917,30 @@ namespace Barrkel.ScratchPad
 				get { return _stamp; }
 			}
 			
-			public override string Apply(string oldText)
+			public override string Apply(string oldText, out int from, out int to)
 			{
+				from = int.MaxValue;
+				to = -1;
 				foreach (var up in _updates)
-					oldText = up.Apply(oldText);
+				{
+					oldText = up.Apply(oldText, out int partFrom, out int partTo);
+					from = Math.Min(from, partFrom);
+					to = Math.Max(to, partTo);
+				}
 				return oldText;
 			}
 			
-			public override string Revert(string newText)
+			public override string Revert(string newText, out int from, out int to)
 			{
+				from = int.MaxValue;
+				to = -1;
 				for (int i = _updates.Count - 1; i >= 0; --i)
-					newText = _updates[i].Revert(newText);
+				{
+					var up = _updates[i];
+					newText = up.Revert(newText, out int partFrom, out int partTo);
+					from = Math.Min(from, partFrom);
+					to = Math.Max(to, partTo);
+				}
 				return newText;
 			}
 			
@@ -943,13 +973,17 @@ namespace Barrkel.ScratchPad
 			public int Offset { get; private set; }
 			public string Value { get; private set; }
 			
-			public override string Apply(string oldText)
+			public override string Apply(string oldText, out int from, out int to)
 			{
+				from = Offset;
+				to = Offset + Value.Length;
 				return oldText.Insert(Offset, Value);
 			}
 			
-			public override string Revert(string newText)
+			public override string Revert(string newText, out int from, out int to)
 			{
+				from = Offset;
+				to = Offset;
 				return newText.Remove(Offset, Value.Length);
 			}
 			
@@ -980,13 +1014,17 @@ namespace Barrkel.ScratchPad
 			public int Offset { get; private set; }
 			public string Value { get; private set; }
 			
-			public override string Apply(string oldText)
+			public override string Apply(string oldText, out int from, out int to)
 			{
+				from = Offset;
+				to = Offset;
 				return oldText.Remove(Offset, Value.Length);
 			}
 			
-			public override string Revert(string newText)
+			public override string Revert(string newText, out int from, out int to)
 			{
+				from = Offset;
+				to = Offset + Value.Length;
 				return newText.Insert(Offset, Value);
 			}
 			
@@ -1000,3 +1038,4 @@ namespace Barrkel.ScratchPad
 		}
 	}
 }
+

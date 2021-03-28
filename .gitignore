@@ -2,3 +2,6 @@
 bin/
 obj/
 test/
+packages/
+Backup/
+.vs/

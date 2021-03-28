@@ -45,8 +45,7 @@ namespace Barrkel.GtkScratchPad
 
 			KeyPressEvent += (sender, args) =>
 			{
-				BookView currentView = _notebook.CurrentPageWidget as BookView;
-				if (currentView == null)
+				if (!(_notebook.CurrentPageWidget is BookView currentView))
 					return;
 				var state = args.Event.State & (Gdk.ModifierType.ShiftMask | Gdk.ModifierType.Mod1Mask | 
 					Gdk.ModifierType.ControlMask);

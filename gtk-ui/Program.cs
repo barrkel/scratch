@@ -8,7 +8,24 @@ namespace Barrkel.GtkScratchPad
 {
 	static class Program
 	{
+
 		public static int Main(string[] args)
+		{
+			try
+			{
+				Console.WriteLine("Hello");
+				return AppMain(args);
+			}
+			catch (Exception ex)
+			{
+				Console.Error.WriteLine("Error: {0}", ex.Message);
+				Console.Error.WriteLine("Stack trace: {0}", ex.StackTrace);
+				Console.ReadLine();
+				return 1;
+			}
+		}
+
+		public static int AppMain(string[] args)
 		{
 			string settingsFile = Path.ChangeExtension(Environment.GetCommandLineArgs()[0], ".settings");
 			Settings settings;
