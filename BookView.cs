@@ -52,17 +52,36 @@ namespace Barrkel.ScratchPad
 			try
 			{
 				if (_currentPage >= Book.Pages.Count)
-					_text.Text = "";
+					Text = "";
 				else if (_currentIterator != null)
-					_text.Text = _currentIterator.Text;
+					Text = _currentIterator.Text;
 				else
-					_text.Text = Book.Pages[_currentPage].Text;
+					Text = Book.Pages[_currentPage].Text;
 				_text.Select(_text.Text.Length, 0);
 				_text.ScrollToCaret();
 			}
 			finally
 			{
 				_settingText = false;
+			}
+		}
+
+		// Property to hide string conversions (if necessary)
+		string Text
+		{
+			get
+			{
+				string result = _text.Text;
+				if (Book.UnixLineEndings)
+					result = result.Replace("\r\n", "\n");
+				return result;
+			}
+			set
+			{
+				string v = value;
+				if (Book.UnixLineEndings)
+					v = v.Replace("\n", "\r\n");
+				_text.Text = v;
 			}
 		}
 		
@@ -124,7 +143,7 @@ namespace Barrkel.ScratchPad
 			_lastModification = DateTime.UtcNow;
 			if (_text.Text == "")
 				EnsureSaved();
-			_textContents = _text.Text;
+			_textContents = Text;
 			if (_textContents == "")
 			{
 				_currentPage = Book.Pages.Count;
