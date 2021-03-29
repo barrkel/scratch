@@ -187,6 +187,7 @@ namespace Barrkel.GtkScratchPad
 		{
 			Gdk.Color grey = new Gdk.Color(0xA0, 0xA0, 0xA0);
 			Gdk.Color lightBlue = new Gdk.Color(207, 207, 239);
+			// TODO: load these settings from a config page
 			var infoFont = Pango.FontDescription.FromString(AppSettings.Get("info-font", "Verdana"));
 			var textFont = Pango.FontDescription.FromString(AppSettings.Get("text-font", "Courier New"));
 			
@@ -275,6 +276,9 @@ namespace Barrkel.GtkScratchPad
 
 		void _textView_KeyPressEvent(object o, KeyPressEventArgs args)
 		{
+			// FIXME: this event actually doesn't grab that much.
+			// E.g. normal Up, Down, Ctrl-Left, Ctrl-Right etc. are not seen here
+			// It doesn't see typed characters. Effectively it only sees F-keys and keys pressed with Alt.
 			bool ctrl = (args.Event.State & Gdk.ModifierType.ControlMask) != 0;
 			bool alt = (args.Event.State & Gdk.ModifierType.Mod1Mask) != 0;
 			bool shift = (args.Event.State & Gdk.ModifierType.ShiftMask) != 0;
