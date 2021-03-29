@@ -13,11 +13,13 @@ namespace Barrkel.GtkScratchPad
 		{
 			Root = root;
 			AppSettings = appSettings;
+			RootController = new ScratchController(Root);
 			InitComponent();
 		}
 		
-		public Settings AppSettings { get; private set; }
-		public ScratchRoot Root { get; private set; }
+		public Settings AppSettings { get; }
+		public ScratchRoot Root { get; }
+		public ScratchController RootController { get; }
 		
 		private void InitComponent()
 		{
@@ -25,9 +27,11 @@ namespace Barrkel.GtkScratchPad
 
 			List<BookView> views = new List<BookView>();
 			_notebook = new Notebook();
+
 			foreach (var book in Root.Books)
 			{
-				BookView view = new BookView(book, AppSettings);
+				ScratchBookController controller = RootController.GetControllerFor(book);
+				BookView view = new BookView(book, controller, AppSettings);
 				views.Add(view);
 				Label viewLabel = new Label { Text = book.ToString() };
 				viewLabel.SetPadding(10, 2);
@@ -38,6 +42,7 @@ namespace Barrkel.GtkScratchPad
 
 			Destroyed += (o, e) =>
 			{
+				// TODO: call EnsureSaved on the root controller instead
 				foreach (var view in views)
 					view.EnsureSaved();
 				Application.Quit();
@@ -47,6 +52,7 @@ namespace Barrkel.GtkScratchPad
 			{
 				if (!(_notebook.CurrentPageWidget is BookView currentView))
 					return;
+				// TODO: implement something like this for the root controller with appropriate view interface
 				var state = args.Event.State & (Gdk.ModifierType.ShiftMask | Gdk.ModifierType.Mod1Mask | 
 					Gdk.ModifierType.ControlMask);
 				if (state == Gdk.ModifierType.None)

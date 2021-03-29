@@ -8,15 +8,64 @@ using System.IO;
 
 namespace Barrkel.GtkScratchPad
 {
-	public static class Stringhelper
+	public static class StringHelper
 	{
 		public static string EscapeMarkup(this string text)
 		{
 			return (text ?? "").Replace("&", "&amp;").Replace("<", "&lt;");
 		}
 	}
-	
-	public class BookView : Frame, ITextViewController
+
+	public static class GdkHelper
+	{
+		private static Dictionary<Gdk.Key, string> _keyNameMap = BuildKeyNameMap();
+
+		public static bool TryGetKeyName(Gdk.Key key, out string name)
+		{
+			return _keyNameMap.TryGetValue(key, out name);
+		}
+
+		private static Dictionary<Gdk.Key, string> BuildKeyNameMap()
+		{
+			Dictionary<Gdk.Key, string> result = new Dictionary<Gdk.Key, string>();
+			Dictionary<string, Gdk.Key> enumMap = new Dictionary<string, Gdk.Key>();
+			foreach (Gdk.Key key in Enum.GetValues(typeof(Gdk.Key)))
+			{
+				string enumName = Enum.GetName(typeof(Gdk.Key), key);
+				enumMap[enumName] = key;
+			}
+			for (int i = 1; i <= 12; ++i)
+			{
+				string name = string.Format("F{0}", i);
+				result.Add(enumMap[name], name);
+			}
+			for (char ch = 'A'; ch <= 'Z'; ++ch)
+			{
+				string name = ch.ToString();
+				result.Add(enumMap[name], name);
+				// map both a and A to A
+				result.Add(enumMap[name.ToLower()], name);
+			}
+			for (char ch = '0'; ch <= '9'; ++ch)
+			{
+				string name = ch.ToString();
+				result.Add(enumMap["Key_" + name], name);
+			}
+			result.Add(Gdk.Key.Page_Up, "PgUp");
+			result.Add(Gdk.Key.Page_Down, "PgDn");
+			result.Add(Gdk.Key.Home, "Home");
+			result.Add(Gdk.Key.End, "End");
+
+			result.Add(Gdk.Key.Up, "Up");
+			result.Add(Gdk.Key.Down, "Down");
+			result.Add(Gdk.Key.Left, "Left");
+			result.Add(Gdk.Key.Right, "Right");
+
+			return result;
+		}
+	}
+
+	public class BookView : Frame, IScratchBookView
 	{
 		DateTime _lastModification;
 		DateTime _lastSave;
@@ -32,15 +81,19 @@ namespace Barrkel.GtkScratchPad
 		Label _pageLabel;
 		Label _versionLabel;
 		List<System.Action> _deferred = new List<System.Action>();
+		ScratchBookController _controller;
 		
-		public BookView(ScratchBook book, Settings appSettings)
+		public BookView(ScratchBook book, ScratchBookController controller, Settings appSettings)
 		{
 			AppSettings = appSettings;
 			Book = book;
 			InitComponent();
 			_currentPage = book.Pages.Count > 0 ? book.Pages.Count - 1 : 0;
+			_controller = controller;
 			UpdateViewLabels();
 			UpdateTextBox();
+
+			_controller.ConnectView(this);
 		}
 		
 		public Settings AppSettings { get; private set; }
@@ -114,11 +167,6 @@ namespace Barrkel.GtkScratchPad
 			UpdateViewLabels();
 		}
 		
-		private void SetTextBoxFocus()
-		{
-			// ???
-		}
-
 		private static string GetTitleMarkup(string title)
 		{
 			return string.Format("<span weight='ultrabold'>{0}</span>", title.EscapeMarkup());
@@ -227,56 +275,48 @@ namespace Barrkel.GtkScratchPad
 
 		void _textView_KeyPressEvent(object o, KeyPressEventArgs args)
 		{
-			// Mod1 => alt
-			var state = args.Event.State & (Gdk.ModifierType.ShiftMask | 
-				Gdk.ModifierType.Mod1Mask | Gdk.ModifierType.ControlMask);
-			
+			bool ctrl = (args.Event.State & Gdk.ModifierType.ControlMask) != 0;
+			bool alt = (args.Event.State & Gdk.ModifierType.Mod1Mask) != 0;
+			bool shift = (args.Event.State & Gdk.ModifierType.ShiftMask) != 0;
+
+			if (GdkHelper.TryGetKeyName(args.Event.Key, out string keyName))
+			{
+				Console.WriteLine("Got a key name: {0}", keyName);
+				// This doesn't pass through ordinary typed characters.
+				if (keyName.Length > 1 || ctrl || alt)
+				{
+					_controller.InformKeyStroke(this, keyName, ctrl, alt, shift);
+				}
+			}
+
+			var state = args.Event.State & Gdk.ModifierType.Mod1Mask;
 			switch (state)
 			{
 				case Gdk.ModifierType.Mod1Mask:
 					switch (args.Event.Key)
 					{
-						case Gdk.Key.Home:
-						case Gdk.Key.Up:
+						case Gdk.Key.Home: // M-Home
+						case Gdk.Key.Up: // M-Up
 							PreviousVersion();
 							break;
 						
-						case Gdk.Key.End:
-						case Gdk.Key.Down:
+						case Gdk.Key.End: // M-End
+						case Gdk.Key.Down: // M-Down
 							NextVersion();
 							break;
 						
-						case Gdk.Key.Page_Up:
-						case Gdk.Key.Left:
+						case Gdk.Key.Page_Up: // M-PgUp
+						case Gdk.Key.Left: // M-Left
 							PreviousPage();
 							break;
 						
-						case Gdk.Key.Page_Down:
-						case Gdk.Key.Right:
+						case Gdk.Key.Page_Down: // M-PgDn
+						case Gdk.Key.Right: // M-Right
 							NextPage();
 							break;
 
 						default:
 							return;
-					}
-					break;
-
-				case Gdk.ModifierType.ShiftMask:
-					switch (args.Event.Key)
-					{
-						case Gdk.Key.F4:
-							InsertText(DateTime.Now.ToString("yyyy-MM-dd HH:mm"));
-							break;
-					}
-					break;
-
-				case 0:
-					ITextViewController v = this;
-					switch (args.Event.Key)
-					{
-						case Gdk.Key.F4:
-							InsertText(DateTime.Today.ToShortDateString());
-							break;
 					}
 					break;
 			}
@@ -426,6 +466,15 @@ namespace Barrkel.GtkScratchPad
 			}
 			_textView.Buffer.MoveMark("insert", _textView.Buffer.GetIterAtOffset(from));
 			_textView.Buffer.MoveMark("selection_bound", _textView.Buffer.GetIterAtOffset(to));
+		}
+
+		public void AddRepeatingTimer(int millis, string actionName)
+		{
+			GLib.Timeout.Add((uint) millis, () => 
+			{
+				_controller.InvokeAction(this, actionName, EmptyArray<string>.Value);
+				return true; 
+			});
 		}
 
 		public int CurrentPosition 

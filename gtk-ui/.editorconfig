@@ -1,1 +1,14 @@
 end_of_line = lf
+
+[*.{cs,vb}]
+
+end_of_line = lf
+
+# IDE0044: Add readonly modifier
+dotnet_style_readonly_field = false:suggestion
+
+# IDE0040: Add accessibility modifiers
+dotnet_style_require_accessibility_modifiers = omit_if_default:silent
+
+# IDE0010: Add missing cases
+dotnet_diagnostic.IDE0010.severity = suggestion

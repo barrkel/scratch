@@ -5,11 +5,15 @@ using System.Linq;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Text.RegularExpressions;
+using System.Reflection;
 
 namespace Barrkel.ScratchPad
 {
-	public interface ITextViewController
+	public interface IScratchBookView
 	{
+		// Get the book this view is for; the view only ever shows a single page from a book
+		ScratchBook Book { get; }
+
 		// Inserts text at CurrentPosition
 		void InsertText(string text);
 		// Gets 0-based position in text
@@ -18,6 +22,165 @@ namespace Barrkel.ScratchPad
 		void SetSelection(int from, int to);
 		// Ensures position is scrolled into view
 		void SetScrollPos(int pos);
+
+		// View should call InvokeAction with actionName every millis milliseconds
+		void AddRepeatingTimer(int millis, string actionName);
+	}
+
+	// Controller for behaviour. UI should receive this and send keystrokes and events to it, along with view callbacks.
+	// The view should be updated via the callbacks.
+	// Much of it is stringly typed for a dynamically bound future.
+	public class ScratchController
+	{
+		// Keyboard bindings to actions. Keyboard uses Emacs-style names; C-M-S-X is Ctrl-Alt-Shift-X.
+		Dictionary<string, string> _bindings = new Dictionary<string, string>();
+
+		Dictionary<string, Action<ScratchBookController,IScratchBookView, string[]>> _actions =
+			new Dictionary<string, Action<ScratchBookController,IScratchBookView, string[]>>();
+
+		Dictionary<ScratchBook, ScratchBookController> _controllerMap = new Dictionary<ScratchBook, ScratchBookController>();
+
+		public ScratchRoot Root { get; }
+
+		public ScratchBookController GetControllerFor(ScratchBook book)
+		{
+			if (_controllerMap.TryGetValue(book, out var result))
+			{
+				return result;
+			}
+			result = new ScratchBookController(this, book);
+			_controllerMap.Add(book, result);
+			return result;
+		}
+
+		public ScratchController(ScratchRoot root)
+		{
+			Root = root;
+
+			foreach (var member in typeof(ScratchBookController).GetMembers())
+			{
+				Console.WriteLine("Considering {0} for action", member.Name); 
+				if (member.MemberType != MemberTypes.Method)
+					continue;
+				MethodInfo method = (MethodInfo) member;
+				Console.WriteLine("Looking for action attribute on {0}", method.Name);
+				foreach (ActionAttribute attr in Attribute.GetCustomAttributes(member, typeof(ActionAttribute)))
+				{
+					Console.WriteLine("Registering {0} to {1}", attr.Name, method.Name);
+					_actions.Add(attr.Name, (controller, view, args) =>
+						method.Invoke(controller, new object[] { view, args }));
+				}
+			}
+
+			// TODO: parse these from a config page
+			_bindings.Add("F4", "insert-date");
+			_bindings.Add("S-F4", "insert-datetime");
+		}
+
+		public bool TryGetBinding(string key, out string actionName)
+		{
+			return _bindings.TryGetValue(key, out actionName);
+		}
+
+		public bool TryGetAction(string actionName, out Action<ScratchBookController,IScratchBookView,string[]> action)
+		{
+			return _actions.TryGetValue(actionName, out action);
+		}
+
+	}
+
+	static class EmptyArray<T>
+	{
+		public static readonly T[] Value = new T[0];
+	}
+
+	[AttributeUsage(AttributeTargets.Method, Inherited = false, AllowMultiple = true)]
+	public class ActionAttribute : Attribute
+	{
+		public ActionAttribute(string name)
+		{
+			Name = name;
+		}
+
+		public string Name { get; }
+	}
+
+	public class ScratchBookController
+	{
+		public ScratchBook Book { get; }
+		public ScratchController RootController { get; }
+
+		public ScratchBookController(ScratchController rootController, ScratchBook book)
+		{
+			Book = book;
+			RootController = rootController;
+		}
+
+		public void ConnectView(IScratchBookView view)
+		{
+			view.AddRepeatingTimer(3000, "check-for-save");
+		}
+
+		[Action("check-for-save")]
+		public void CheckForSave(IScratchBookView view, string[] _)
+		{
+			// ...
+		}
+
+		public void InformKeyStroke(IScratchBookView view, string keyName, bool ctrl, bool alt, bool shift)
+		{
+			string ctrlPrefix = ctrl ? "C-" : "";
+			string altPrefix = alt ? "M-" : "";
+			string shiftPrefix = shift ? "S-" : "";
+			string key = string.Concat(ctrlPrefix, altPrefix, shiftPrefix, keyName);
+
+			Console.WriteLine("Looking for binding for {0}", key);
+			// TODO: consider page / book-specific binds and actions
+			// This is modal behaviour, a direction we probably don't need to go in
+			if (RootController.TryGetBinding(key, out var actionName))
+			{
+				Console.WriteLine("Found {0}, looking for callback", actionName);
+				if (RootController.TryGetAction(actionName, out var action))
+				{
+					Console.WriteLine("Invoking");
+					action(this, view, EmptyArray<string>.Value);
+				}
+			}
+		}
+
+		public void InvokeAction(IScratchBookView view, string actionName, string[] args)
+		{
+			if (RootController.TryGetAction(actionName, out var action))
+			{
+				action(this, view, args);
+			}
+		}
+
+		public void InformEvent(IScratchBookView view, string eventName, string[] args)
+		{
+			if (RootController.TryGetAction("on-" + eventName, out var action))
+			{
+				action(this, view, args);
+			}
+		}
+
+		[Action("insert-date")]
+		public void DoInsertDate(IScratchBookView view, string[] _)
+		{
+			view.InsertText(DateTime.Today.ToString("yyyy-MM-dd"));
+		}
+
+		[Action("insert-datetime")]
+		public void DoInsertDateTime(IScratchBookView view, string[] _)
+		{
+			view.InsertText(DateTime.Now.ToString("yyyy-MM-dd HH:mm"));
+		}
+
+		[Action("on-text-changed")]
+		public void OnTextChanged(IScratchBookView view, string[] args)
+		{
+			// text has changed
+		}
 	}
 
 	// The main root. Every directory in this directory is a tab on the main interface, like a separate
@@ -25,29 +188,22 @@ namespace Barrkel.ScratchPad
 	// Every file in this directory is in the main notebook.
 	public class ScratchRoot
 	{
-		List<ScratchBook> _books;
-		ReadOnlyCollection<ScratchBook> _bookCollection;
-		
+		readonly List<ScratchBook> _books;
+
 		public ScratchRoot(string rootDirectory)
 		{
 			_books = new List<ScratchBook>();
-			_bookCollection = new ReadOnlyCollection<ScratchBook>(_books);
+			Books = new ReadOnlyCollection<ScratchBook>(_books);
 			RootDirectory = rootDirectory;
 			_books.Add(new ScratchBook(rootDirectory));
 			foreach (string dir in Directory.GetDirectories(rootDirectory))
 				_books.Add(new ScratchBook(dir));
 		}
 		
-		public string RootDirectory
-		{
-			get; private set;
-		}
-		
-		public ReadOnlyCollection<ScratchBook> Books
-		{
-			get { return _bookCollection; }
-		}
-		
+		public string RootDirectory { get; }
+
+		public ReadOnlyCollection<ScratchBook> Books { get; }
+
 		public void SaveLatest()
 		{
 			foreach (var book in Books)
@@ -58,15 +214,13 @@ namespace Barrkel.ScratchPad
 	public class ScratchBook
 	{
 		List<ScratchPage> _pages = new List<ScratchPage>();
-		ReadOnlyCollection<ScratchPage> _pageCollection;
 		string _rootDirectory;
-		bool _unixLineEndings;
-		
+
 		public ScratchBook(string rootDirectory)
 		{
-			_pageCollection = new ReadOnlyCollection<ScratchPage>(_pages);
+			Pages = new ReadOnlyCollection<ScratchPage>(_pages);
 			_rootDirectory = rootDirectory;
-			_unixLineEndings = File.Exists(Path.Combine(rootDirectory, ".unix"));
+			UnixLineEndings = File.Exists(Path.Combine(rootDirectory, ".unix"));
 			var root = new DirectoryInfo(rootDirectory);
 			_pages.AddRange(root.GetFiles("*.txt")
 				.Union(root.GetFiles("*.log"))
@@ -75,8 +229,8 @@ namespace Barrkel.ScratchPad
 				.Distinct()
 				.Select(name => new ScratchPage(name)));
 		}
-		
-		public bool UnixLineEndings { get { return _unixLineEndings; } }
+
+		public bool UnixLineEndings { get; }
 
 		static bool DoesBaseNameExist(string baseName)
 		{
@@ -102,12 +256,9 @@ namespace Barrkel.ScratchPad
 					return result;
 			}
 		}
-		
-		public ReadOnlyCollection<ScratchPage> Pages
-		{
-			get { return _pageCollection; }
-		}
-		
+
+		public ReadOnlyCollection<ScratchPage> Pages { get; }
+
 		public int MoveToEnd(int pageIndex)
 		{
 			var page = _pages[pageIndex];
