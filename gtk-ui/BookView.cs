@@ -281,7 +281,6 @@ namespace Barrkel.GtkScratchPad
 
 			if (GdkHelper.TryGetKeyName(args.Event.Key, out string keyName))
 			{
-				Console.WriteLine("Got a key name: {0}", keyName);
 				// This doesn't pass through ordinary typed characters.
 				if (keyName.Length > 1 || ctrl || alt)
 				{

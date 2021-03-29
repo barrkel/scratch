@@ -59,14 +59,11 @@ namespace Barrkel.ScratchPad
 
 			foreach (var member in typeof(ScratchBookController).GetMembers())
 			{
-				Console.WriteLine("Considering {0} for action", member.Name); 
 				if (member.MemberType != MemberTypes.Method)
 					continue;
 				MethodInfo method = (MethodInfo) member;
-				Console.WriteLine("Looking for action attribute on {0}", method.Name);
 				foreach (ActionAttribute attr in Attribute.GetCustomAttributes(member, typeof(ActionAttribute)))
 				{
-					Console.WriteLine("Registering {0} to {1}", attr.Name, method.Name);
 					_actions.Add(attr.Name, (controller, view, args) =>
 						method.Invoke(controller, new object[] { view, args }));
 				}
@@ -134,15 +131,12 @@ namespace Barrkel.ScratchPad
 			string shiftPrefix = shift ? "S-" : "";
 			string key = string.Concat(ctrlPrefix, altPrefix, shiftPrefix, keyName);
 
-			Console.WriteLine("Looking for binding for {0}", key);
 			// TODO: consider page / book-specific binds and actions
 			// This is modal behaviour, a direction we probably don't need to go in
 			if (RootController.TryGetBinding(key, out var actionName))
 			{
-				Console.WriteLine("Found {0}, looking for callback", actionName);
 				if (RootController.TryGetAction(actionName, out var action))
 				{
-					Console.WriteLine("Invoking");
 					action(this, view, EmptyArray<string>.Value);
 				}
 			}

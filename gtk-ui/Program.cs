@@ -13,7 +13,6 @@ namespace Barrkel.GtkScratchPad
 		{
 			try
 			{
-				Console.WriteLine("Hello");
 				return AppMain(args);
 			}
 			catch (Exception ex)
