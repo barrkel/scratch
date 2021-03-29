@@ -190,9 +190,11 @@ namespace Barrkel.GtkScratchPad
 			// TODO: load these settings from a config page
 			var infoFont = Pango.FontDescription.FromString(AppSettings.Get("info-font", "Verdana"));
 			var textFont = Pango.FontDescription.FromString(AppSettings.Get("text-font", "Courier New"));
-			
-			_textView = new TextView();
-			_textView.WrapMode = WrapMode.Word;
+
+			_textView = new TextView
+			{
+				WrapMode = WrapMode.Word
+			};
 			_textView.ModifyBase(StateType.Normal, lightBlue);
 			_textView.Buffer.Changed += _text_TextChanged;
 			_textView.KeyPressEvent += _textView_KeyPressEvent;
@@ -219,10 +221,12 @@ namespace Barrkel.GtkScratchPad
 			//   pageLabel
 			HBox locationInfo = new HBox();
 			VBox locationLeft = new VBox();
-			
-			_dateLabel = new Label();
+
+			_dateLabel = new Label
+			{
+				Justify = Justification.Left
+			};
 			_dateLabel.SetAlignment(0, 0);
-			_dateLabel.Justify = Justification.Left;
 			_dateLabel.SetPadding(5, 5);
 			_dateLabel.ModifyFont(infoFont);
 			locationLeft.PackStart(_dateLabel, false, false, 0);
@@ -235,11 +239,13 @@ namespace Barrkel.GtkScratchPad
 			locationLeft.PackStart(_versionLabel, false, false, 0);
 			
 			locationInfo.PackStart(locationLeft, true, true, 0);
-			
-			_pageLabel = new Label();
-			_pageLabel.Markup = GetPageMarkup(1, 5);
+
+			_pageLabel = new Label
+			{
+				Markup = GetPageMarkup(1, 5),
+				Justify = Justification.Right
+			};
 			_pageLabel.SetAlignment(1, 0.5f);
-			_pageLabel.Justify = Justification.Right;
 			_pageLabel.SetPadding(5, 5);
 			_pageLabel.ModifyFont(infoFont);
 			locationInfo.PackEnd(_pageLabel, true, true, 0);
