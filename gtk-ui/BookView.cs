@@ -42,15 +42,49 @@ namespace Barrkel.GtkScratchPad
 			for (char ch = 'A'; ch <= 'Z'; ++ch)
 			{
 				string name = ch.ToString();
+				// Copy emacs logic for shift on normal characters.
+				// map A to A
 				result.Add(enumMap[name], name);
-				// map both a and A to A
-				result.Add(enumMap[name.ToLower()], name);
+				// and a to a
+				result.Add(enumMap[name.ToLower()], name.ToLower());
 			}
 			for (char ch = '0'; ch <= '9'; ++ch)
 			{
 				string name = ch.ToString();
 				result.Add(enumMap["Key_" + name], name);
 			}
+			result.Add(Gdk.Key.quoteleft, "`");
+			result.Add(Gdk.Key.quoteright, "'");
+			result.Add(Gdk.Key.quotedbl, "\"");
+			result.Add(Gdk.Key.exclam, "!");
+			result.Add(Gdk.Key.at, "@");
+			result.Add(Gdk.Key.numbersign, "#");
+			result.Add(Gdk.Key.dollar, "$");
+			result.Add(Gdk.Key.percent, "%");
+			result.Add(Gdk.Key.asciicircum, "^");
+			result.Add(Gdk.Key.ampersand, "&");
+			result.Add(Gdk.Key.asterisk, "*");
+			result.Add(Gdk.Key.parenleft, "(");
+			result.Add(Gdk.Key.parenright, ")");
+			result.Add(Gdk.Key.bracketleft, "[");
+			result.Add(Gdk.Key.bracketright, "]");
+			result.Add(Gdk.Key.braceleft, "{");
+			result.Add(Gdk.Key.braceright, "}");
+			result.Add(Gdk.Key.plus, "+");
+			result.Add(Gdk.Key.minus, "-");
+			result.Add(Gdk.Key.underscore, "_");
+			result.Add(Gdk.Key.equal, "=");
+			result.Add(Gdk.Key.slash, "/");
+			result.Add(Gdk.Key.backslash, "\\");
+			result.Add(Gdk.Key.bar, "|");
+			result.Add(Gdk.Key.period, ".");
+			result.Add(Gdk.Key.comma, ",");
+			result.Add(Gdk.Key.less, "<");
+			result.Add(Gdk.Key.greater, ">");
+			result.Add(Gdk.Key.colon, ":");
+			result.Add(Gdk.Key.semicolon, ";");
+			result.Add(Gdk.Key.Escape, "Esc");
+			result.Add(Gdk.Key.asciitilde, "~");
 			result.Add(Gdk.Key.Page_Up, "PgUp");
 			result.Add(Gdk.Key.Page_Down, "PgDn");
 			result.Add(Gdk.Key.Home, "Home");
@@ -61,8 +95,36 @@ namespace Barrkel.GtkScratchPad
 			result.Add(Gdk.Key.Left, "Left");
 			result.Add(Gdk.Key.Right, "Right");
 
+			result.Add(Gdk.Key.Return, "Return");
+			result.Add(Gdk.Key.Delete, "Delete");
+			result.Add(Gdk.Key.Insert, "Insert");
+			result.Add(Gdk.Key.BackSpace, "BackSpace");
+			result.Add(Gdk.Key.space, "Space");
+			result.Add(Gdk.Key.Tab, "Tab");
+			// this comes out with S-Tab
+			result.Add(Gdk.Key.ISO_Left_Tab, "Tab");
+
 			return result;
 		}
+	}
+
+	public delegate void KeyEventHandler(Gdk.EventKey evnt, ref bool handled);
+
+	public class MyTextView : TextView
+	{
+		public event KeyEventHandler KeyDownEvent;
+
+		[GLib.DefaultSignalHandler(Type = typeof(Widget), ConnectionMethod = "OverrideKeyPressEvent")]
+		protected override bool OnKeyPressEvent(Gdk.EventKey evnt)
+		{
+			bool handled = false;
+			KeyDownEvent?.Invoke(evnt, ref handled);
+			if (handled)
+				return true;
+			else
+				return base.OnKeyPressEvent(evnt);
+		}
+
 	}
 
 	public class BookView : Frame, IScratchBookView
@@ -74,7 +136,7 @@ namespace Barrkel.GtkScratchPad
 		string _textContents;
 		// If non-null, then browsing history.
 		ScratchIterator _currentIterator;
-		TextView _textView;
+		MyTextView _textView;
 		bool _settingText;
 		Label _titleLabel;
 		Label _dateLabel;
@@ -191,13 +253,13 @@ namespace Barrkel.GtkScratchPad
 			var infoFont = Pango.FontDescription.FromString(AppSettings.Get("info-font", "Verdana"));
 			var textFont = Pango.FontDescription.FromString(AppSettings.Get("text-font", "Courier New"));
 
-			_textView = new TextView
+			_textView = new MyTextView
 			{
 				WrapMode = WrapMode.Word
 			};
 			_textView.ModifyBase(StateType.Normal, lightBlue);
 			_textView.Buffer.Changed += _text_TextChanged;
-			_textView.KeyPressEvent += _textView_KeyPressEvent;
+			_textView.KeyDownEvent += _textView_KeyDownEvent;
 			_textView.ModifyFont(textFont);
 
 			ScrolledWindow scrolledTextView = new ScrolledWindow();
@@ -280,29 +342,29 @@ namespace Barrkel.GtkScratchPad
 			return true;
 		}
 
-		void _textView_KeyPressEvent(object o, KeyPressEventArgs args)
+		void _textView_KeyDownEvent(Gdk.EventKey evnt, ref bool handled)
 		{
 			// FIXME: this event actually doesn't grab that much.
 			// E.g. normal Up, Down, Ctrl-Left, Ctrl-Right etc. are not seen here
 			// It doesn't see typed characters. Effectively it only sees F-keys and keys pressed with Alt.
-			bool ctrl = (args.Event.State & Gdk.ModifierType.ControlMask) != 0;
-			bool alt = (args.Event.State & Gdk.ModifierType.Mod1Mask) != 0;
-			bool shift = (args.Event.State & Gdk.ModifierType.ShiftMask) != 0;
+			bool ctrl = (evnt.State & Gdk.ModifierType.ControlMask) != 0;
+			bool alt = (evnt.State & Gdk.ModifierType.Mod1Mask) != 0;
+			bool shift = (evnt.State & Gdk.ModifierType.ShiftMask) != 0;
 
-			if (GdkHelper.TryGetKeyName(args.Event.Key, out string keyName))
+			if (GdkHelper.TryGetKeyName(evnt.Key, out string keyName))
 			{
-				// This doesn't pass through ordinary typed characters.
-				if (keyName.Length > 1 || ctrl || alt)
-				{
-					_controller.InformKeyStroke(this, keyName, ctrl, alt, shift);
-				}
+				handled = _controller.InformKeyStroke(this, keyName, ctrl, alt, shift);
+			}
+			else 
+			{
+				// Console.WriteLine("Not mapped: {0}", evnt.Key);
 			}
 
-			var state = args.Event.State & Gdk.ModifierType.Mod1Mask;
+			var state = evnt.State & Gdk.ModifierType.Mod1Mask;
 			switch (state)
 			{
 				case Gdk.ModifierType.Mod1Mask:
-					switch (args.Event.Key)
+					switch (evnt.Key)
 					{
 						case Gdk.Key.Home: // M-Home
 						case Gdk.Key.Up: // M-Up
@@ -439,7 +501,7 @@ namespace Barrkel.GtkScratchPad
 				return;
 			EnsureSaved();
 			_currentIterator = null;
-			_currentPage = pageIndex;
+			_currentPage = Book.MoveToEnd(pageIndex);
 			UpdateTextBox();
 			UpdateTitle();
 			UpdateViewLabels();

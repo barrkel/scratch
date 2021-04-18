@@ -124,11 +124,13 @@ namespace Barrkel.ScratchPad
 			// ...
 		}
 
-		public void InformKeyStroke(IScratchBookView view, string keyName, bool ctrl, bool alt, bool shift)
+		public bool InformKeyStroke(IScratchBookView view, string keyName, bool ctrl, bool alt, bool shift)
 		{
 			string ctrlPrefix = ctrl ? "C-" : "";
 			string altPrefix = alt ? "M-" : "";
-			string shiftPrefix = shift ? "S-" : "";
+			// Convention: self-printing keys have a single character. Exceptions are Return and Space.
+			// Within this convention, don't use S- if shift was pressed to access the key. M-A is M-S-a, but M-A is emacs style.
+			string shiftPrefix = (keyName.Length > 1 && shift) ? "S-" : "";
 			string key = string.Concat(ctrlPrefix, altPrefix, shiftPrefix, keyName);
 
 			// TODO: consider page / book-specific binds and actions
@@ -138,8 +140,11 @@ namespace Barrkel.ScratchPad
 				if (RootController.TryGetAction(actionName, out var action))
 				{
 					action(this, view, EmptyArray<string>.Value);
+					return true;
 				}
 			}
+
+			return false;
 		}
 
 		public void InvokeAction(IScratchBookView view, string actionName, string[] args)

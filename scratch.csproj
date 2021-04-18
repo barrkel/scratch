@@ -53,6 +53,7 @@
     <Compile Include="BookView.Designer.cs">
       <DependentUpon>BookView.cs</DependentUpon>
     </Compile>
+    <Compile Include="gtk-ui\Scratch.cs" />
     <Compile Include="MainForm.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -89,7 +90,6 @@
       <DependentUpon>Settings.settings</DependentUpon>
       <DesignTimeSharedInput>True</DesignTimeSharedInput>
     </Compile>
-    <Compile Include="Scratch.cs" />
     <Compile Include="TitleSearchForm.cs">
       <SubType>Form</SubType>
     </Compile>

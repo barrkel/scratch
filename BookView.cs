@@ -52,11 +52,11 @@ namespace Barrkel.ScratchPad
 			try
 			{
 				if (_currentPage >= Book.Pages.Count)
-					Text = "";
+					NoteText = "";
 				else if (_currentIterator != null)
-					Text = _currentIterator.Text;
+					NoteText = _currentIterator.Text;
 				else
-					Text = Book.Pages[_currentPage].Text;
+					NoteText = Book.Pages[_currentPage].Text;
 				_text.Select(_text.Text.Length, 0);
 				_text.ScrollToCaret();
 			}
@@ -67,7 +67,7 @@ namespace Barrkel.ScratchPad
 		}
 
 		// Property to hide string conversions (if necessary)
-		string Text
+		string NoteText
 		{
 			get
 			{
@@ -143,7 +143,7 @@ namespace Barrkel.ScratchPad
 			_lastModification = DateTime.UtcNow;
 			if (_text.Text == "")
 				EnsureSaved();
-			_textContents = Text;
+			_textContents = NoteText;
 			if (_textContents == "")
 			{
 				_currentPage = Book.Pages.Count;
@@ -233,7 +233,7 @@ namespace Barrkel.ScratchPad
 				return;
 			EnsureSaved();
 			_currentIterator = null;
-			_currentPage = pageIndex;
+			_currentPage = Book.MoveToEnd(pageIndex);
 			UpdateTextBox();
 			UpdateTitle();
 			UpdateViewLabels();
