@@ -29,6 +29,18 @@ namespace Barrkel.GtkScratchPad
 		{
 			Dictionary<Gdk.Key, string> result = new Dictionary<Gdk.Key, string>();
 			Dictionary<string, Gdk.Key> enumMap = new Dictionary<string, Gdk.Key>();
+
+			void tryAddNamed(string enumName, string name)
+			{
+				if (enumMap.TryGetValue(enumName, out Gdk.Key key))
+					result.Add(key, name);
+			}
+
+			void tryAdd(string name)
+			{
+				tryAddNamed(name, name);
+			}
+
 			foreach (Gdk.Key key in Enum.GetValues(typeof(Gdk.Key)))
 			{
 				string enumName = Enum.GetName(typeof(Gdk.Key), key);
@@ -37,21 +49,21 @@ namespace Barrkel.GtkScratchPad
 			for (int i = 1; i <= 12; ++i)
 			{
 				string name = string.Format("F{0}", i);
-				result.Add(enumMap[name], name);
+				tryAdd(name);
 			}
 			for (char ch = 'A'; ch <= 'Z'; ++ch)
 			{
 				string name = ch.ToString();
 				// Copy emacs logic for shift on normal characters.
 				// map A to A
-				result.Add(enumMap[name], name);
+				tryAdd(name);
 				// and a to a
-				result.Add(enumMap[name.ToLower()], name.ToLower());
+				tryAdd(name.ToLower());
 			}
 			for (char ch = '0'; ch <= '9'; ++ch)
 			{
 				string name = ch.ToString();
-				result.Add(enumMap["Key_" + name], name);
+				tryAddNamed("Key_" + name, name);
 			}
 			result.Add(Gdk.Key.quoteleft, "`");
 			result.Add(Gdk.Key.quoteright, "'");
