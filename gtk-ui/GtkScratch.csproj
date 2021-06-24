@@ -66,37 +66,16 @@
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\..\other\bulk\mono-2.10.9\lib\mono\gtk-sharp-2.0\atk-sharp.dll</HintPath>
     </Reference>
-    <Reference Include="AtkSharp, Version=3.24.24.34, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\AtkSharp.3.24.24.34\lib\netstandard2.0\AtkSharp.dll</HintPath>
-    </Reference>
-    <Reference Include="CairoSharp, Version=3.24.24.34, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\CairoSharp.3.24.24.34\lib\netstandard2.0\CairoSharp.dll</HintPath>
-    </Reference>
     <Reference Include="gdk-sharp, Version=2.12.0.0, Culture=neutral, PublicKeyToken=35e10195dab3c99f" />
-    <Reference Include="GdkSharp, Version=3.24.24.34, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\GdkSharp.3.24.24.34\lib\netstandard2.0\GdkSharp.dll</HintPath>
-    </Reference>
-    <Reference Include="GioSharp, Version=3.24.24.34, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\GioSharp.3.24.24.34\lib\netstandard2.0\GioSharp.dll</HintPath>
-    </Reference>
     <Reference Include="glib-sharp, Version=2.12.0.0, Culture=neutral, PublicKeyToken=35e10195dab3c99f">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\..\other\bulk\mono-2.10.9\lib\mono\gtk-sharp-2.0\glib-sharp.dll</HintPath>
-    </Reference>
-    <Reference Include="GLibSharp, Version=3.24.24.34, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\GLibSharp.3.24.24.34\lib\netstandard2.0\GLibSharp.dll</HintPath>
     </Reference>
     <Reference Include="gtk-sharp, Version=2.12.0.0, Culture=neutral, PublicKeyToken=35e10195dab3c99f">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\..\other\bulk\mono-2.10.9\lib\mono\gtk-sharp-2.0\gtk-sharp.dll</HintPath>
     </Reference>
-    <Reference Include="GtkSharp, Version=3.24.24.34, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\GtkSharp.3.24.24.34\lib\netstandard2.0\GtkSharp.dll</HintPath>
-    </Reference>
     <Reference Include="pango-sharp, Version=2.12.0.0, Culture=neutral, PublicKeyToken=35e10195dab3c99f" />
-    <Reference Include="PangoSharp, Version=3.24.24.34, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\PangoSharp.3.24.24.34\lib\netstandard2.0\PangoSharp.dll</HintPath>
-    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core">
       <RequiredTargetFramework>3.5</RequiredTargetFramework>
