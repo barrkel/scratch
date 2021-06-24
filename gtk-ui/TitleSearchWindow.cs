@@ -12,6 +12,11 @@ namespace Barrkel.GtkScratchPad
 		Cancel
 	}
 	
+	public interface ISearchable
+	{
+		IEnumerable<(string, object)> Search(string text);
+	}
+
 	public class ModalWindow : Window, IDisposable
 	{
 		public ModalWindow(string title) : base(title)
@@ -68,30 +73,32 @@ namespace Barrkel.GtkScratchPad
 		ListStore _searchResultsStore;
 		int _searchResultsStoreCount; // asinine results store
 		
-		public TitleSearchWindow(ScratchBook book, Settings appSettings) : base("GTK ScratchPad")
+		public TitleSearchWindow(ISearchable searchable, Settings appSettings) : base("GTK ScratchPad")
 		{
-			Book = book;
+			Searchable = searchable;
 			AppSettings = appSettings;
 			InitComponent();
 		}
 		
-		public static int RunSearch(Window parent, ScratchBook book, Settings settings)
+		public static object RunSearch(Window parent, ISearchable searchable, Settings settings)
 		{
-			using (TitleSearchWindow window = new TitleSearchWindow(book, settings))
+			using (TitleSearchWindow window = new TitleSearchWindow(searchable, settings))
 			{
 				switch (window.ShowModal(parent))
 				{
 					case ModalResult.OK:
+						if (window.SelectedItem == null)
+							return null;
 						return window.SelectedItem.Value;
 
 					default:
-						return -1;
+						return null;
 				}
 			}
 		}
 		
 		public Settings AppSettings { get; private set; }
-		public ScratchBook Book { get; private set; }
+		public ISearchable Searchable { get; private set; }
 		
 		private void InitComponent()
 		{
@@ -148,10 +155,10 @@ namespace Barrkel.GtkScratchPad
 			_searchResultsStore.Clear();
 			_searchResultsStoreCount = 0;
 			
-			foreach (var m in Book.SearchTitles(_searchTextView.Buffer.Text))
+			foreach (var (title, v) in Searchable.Search(_searchTextView.Buffer.Text))
 			{
 				_searchResultsStore.SetValue(_searchResultsStore.Append(), 0, 
-					new TitleSearchResult(m.Key, _searchResultsStoreCount, m.Value));
+					new TitleSearchResult(title, _searchResultsStoreCount, v));
 				++_searchResultsStoreCount;
 				
 				if (_searchResultsStoreCount >= 100)
@@ -246,7 +253,7 @@ namespace Barrkel.GtkScratchPad
 	
 	class TitleSearchResult
 	{
-		public TitleSearchResult(string title, int index, int value)
+		public TitleSearchResult(string title, int index, object value)
 		{
 			Title = title;
 			Index = index;
@@ -255,7 +262,7 @@ namespace Barrkel.GtkScratchPad
 		
 		public string Title { get; private set; }
 		public int Index { get; private set; }
-		public int Value { get; private set; }
+		public object Value { get; private set; }
 
 		public override string ToString()
 		{
