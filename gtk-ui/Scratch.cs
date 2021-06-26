@@ -209,11 +209,91 @@ namespace Barrkel.ScratchPad
 				book.SaveLatest();
 		}
 	}
-	
+
+	static class DictionaryExtension
+	{
+		public static void Deconstruct<TKey, TValue>(this KeyValuePair<TKey, TValue> self, out TKey key, out TValue value)
+		{
+			key = self.Key;
+			value = self.Value;
+		}
+	}
+
+	// Simple text:text cache with timestamp-based invalidation.
+	public class LineCache
+	{
+		string _storeFile;
+		Dictionary<string, (DateTime, string)> _cache = new Dictionary<string, (DateTime, string)>();
+		bool _dirty;
+
+		public LineCache(string storeFile)
+		{
+			_storeFile = storeFile;
+			Load();
+		}
+
+		private void Load()
+		{
+			_cache.Clear();
+			if (!File.Exists(_storeFile))
+				return;
+			using (var r = new LineReader(_storeFile))
+			{
+				int count = int.Parse(r.ReadLine());
+				for (int i = 0; i < count; ++i)
+				{
+					string name = StringUtil.Unescape(r.ReadLine());
+					DateTime timestamp = DateTime.Parse(r.ReadLine());
+					string line = StringUtil.Unescape(r.ReadLine());
+					_cache[name] = (timestamp, line);
+				}
+			}
+		}
+
+		public void Save()
+		{
+			if (!_dirty)
+				return;
+			using (var w = new LineWriter(_storeFile, FileMode.Create))
+			{
+				w.WriteLine(_cache.Count.ToString());
+				foreach (var (name, (timestamp, line)) in _cache)
+				{
+					w.WriteLine(StringUtil.Escape(name));
+					w.WriteLine(timestamp.ToString());
+					w.WriteLine(StringUtil.Escape(line));
+				}
+			}
+			_dirty = false;
+		}
+
+		public string Get(string name, DateTime timestamp, Func<string> fetch)
+		{
+			if (_cache.TryGetValue(name, out var entry))
+			{
+				var (cacheTs, line) = entry;
+				TimeSpan age = timestamp - cacheTs;
+				// 1 second leeway because of imprecision in file system timestamps etc.
+				if (age < TimeSpan.FromSeconds(1))
+					return line;
+			}
+			var update = fetch();
+			Put(name, timestamp, update);
+			return update;
+		}
+
+		public void Put(string name, DateTime timestamp, string line)
+		{
+			_cache[name] = (timestamp, line);
+			_dirty = true;
+		}
+	}
+
 	public class ScratchBook
 	{
 		List<ScratchPage> _pages = new List<ScratchPage>();
 		string _rootDirectory;
+		LineCache _titleCache;
 
 		public ScratchBook(string rootDirectory)
 		{
@@ -221,12 +301,13 @@ namespace Barrkel.ScratchPad
 			_rootDirectory = rootDirectory;
 			UnixLineEndings = File.Exists(Path.Combine(rootDirectory, ".unix"));
 			var root = new DirectoryInfo(rootDirectory);
+			_titleCache = new LineCache(Path.Combine(_rootDirectory, "title_cache.text"));
 			_pages.AddRange(root.GetFiles("*.txt")
 				.Union(root.GetFiles("*.log"))
 				.OrderBy(f => f.LastWriteTimeUtc)
 				.Select(f => Path.ChangeExtension(f.FullName, null))
 				.Distinct()
-				.Select(name => new ScratchPage(name)));
+				.Select(name => new ScratchPage(_titleCache, name)));
 		}
 
 		public bool UnixLineEndings { get; }
@@ -268,17 +349,24 @@ namespace Barrkel.ScratchPad
 		
 		public ScratchPage AddPage()
 		{
-			ScratchPage result = new ScratchPage(FindNewPageBaseName());
+			ScratchPage result = new ScratchPage(_titleCache, FindNewPageBaseName());
 			_pages.Add(result);
 			return result;
 		}
 		
+		// This is called periodically, and on every modification.
+		public void EnsureSaved()
+		{
+			_titleCache.Save();
+		}
+
+		// This is only called if content has been modified.
 		public void SaveLatest()
 		{
 			foreach (var page in Pages)
 				page.SaveLatest();
 		}
-		
+
 		static bool IsSearchMatch(string text, string[] parts)
 		{
 			foreach (string part in parts)
@@ -334,39 +422,36 @@ namespace Barrkel.ScratchPad
 			return Path.GetFileName(_rootDirectory);
 		}
 	}
-	
-	public class ScratchPage : ScratchPageBase
+
+	interface IEphemeralPage
 	{
-		ScratchPageBase _phantomImpl;
+		DateTime ChangeStamp { get; }
+		string Title { get; }
+		string Text { get; }
+	}
+
+	public class ScratchPage
+	{
+		PhantomScratchPage _phantomImpl;
 		RealScratchPage _realImpl;
+		// These timestamps are for detecting out of process modifications to txt and log files
 		DateTime? _logStamp;
 		DateTime? _textStamp;
 		string _baseName;
+		string _shortName;
+		LineCache _titleCache;
 		
-		public ScratchPage(string baseName)
+		public ScratchPage(LineCache titleCache, string baseName)
 		{
 			_baseName = baseName;
+			_shortName = Path.GetFileNameWithoutExtension(_baseName);
+			_titleCache = titleCache;
 			TextFile = new FileInfo(Path.ChangeExtension(_baseName, ".txt"));
 			LogFile = new FileInfo(Path.ChangeExtension(_baseName, ".log"));
 		}
-		
-		public override string Title
-		{
-			get
-			{
-				if (_realImpl != null)
-					return _realImpl.Title;
-				if (_phantomImpl != null)
-					return _phantomImpl.Title;
-				if (TextFile.Exists)
-					using (var r = new LineReader(TextFile.FullName))
-						return r.ReadLine();
-				// Only log file exists => we'll need to replay it to discover title.
-				// No point throwing away that work.
-				return GetRealImpl().Title;
-			}
-		}
-		
+
+		public string Title => _titleCache.Get(_shortName, ChangeStamp, () => this.GetPhantomImpl().Title);
+
 		internal FileInfo TextFile
 		{
 			get; set;
@@ -376,11 +461,13 @@ namespace Barrkel.ScratchPad
 		{
 			get; set;
 		}
-		
-		ScratchPageBase GetPhantomImpl()
+
+		IEphemeralPage GetPhantomImpl()
 		{
 			if (_realImpl != null)
 				return _realImpl;
+			if (!TextFile.Exists)
+				return GetRealImpl();
 			if (_phantomImpl == null)
 				_phantomImpl = new PhantomScratchPage(this);
 			return _phantomImpl;
@@ -436,6 +523,7 @@ namespace Barrkel.ScratchPad
 			// Try getting it from the text file.
 			if (TextFile.Exists)
 			{
+				Console.WriteLine("ScratchPage reading all text in {0}", TextFile.FullName);
 				text = File.ReadAllText(TextFile.FullName);
 				_textStamp = TextFile.LastWriteTimeUtc;
 			}
@@ -463,29 +551,159 @@ namespace Barrkel.ScratchPad
 			_logStamp = LogFile.LastWriteTimeUtc;
 			_textStamp = TextFile.LastWriteTimeUtc;
 		}
-		
-		public override ScratchIterator GetIterator()
-		{
-			return GetRealImpl().GetIterator();
-		}
-		
-		public override DateTime CreationStamp
-		{
-			get { return GetPhantomImpl().CreationStamp; }
-		}
-		
-		public override DateTime ChangeStamp
-		{
-			get { return GetPhantomImpl().ChangeStamp; }
-		}
-		
-		public override string Text
+
+		public ScratchIterator GetIterator() => GetRealImpl().GetIterator();
+
+		public DateTime ChangeStamp => GetPhantomImpl().ChangeStamp;
+
+		public string Text
 		{
 			get { return GetPhantomImpl().Text; }
 			set { GetRealImpl().Text = value; }
 		}
 	}
-	
+
+	public class PhantomScratchPage : IEphemeralPage
+	{
+		ScratchPage _page;
+		string _text;
+
+		public PhantomScratchPage(ScratchPage page)
+		{
+			_page = page;
+		}
+
+		public string Title
+		{
+			get
+			{
+				string text = Text;
+				int newLine = text.IndexOfAny(new[] { '\r', '\n' });
+				if (newLine < 0)
+					return text;
+				return text.Substring(0, newLine);
+			}
+		}
+
+		public DateTime ChangeStamp
+		{
+			get
+			{
+				if (_page.TextFile.Exists)
+					return _page.TextFile.LastWriteTimeUtc;
+				if (_page.LogFile.Exists)
+					return _page.LogFile.LastWriteTimeUtc;
+				return DateTime.UtcNow;
+			}
+		}
+
+		public string Text
+		{
+			get
+			{
+				if (_text != null)
+					return _text;
+				if (_page.TextFile.Exists)
+				{
+					Console.WriteLine("PhantomScratchPage reading all {0}", _page.TextFile.FullName);
+					_text = File.ReadAllText(_page.TextFile.FullName);
+					return _text;
+				}
+				if (_page.LogFile.Exists)
+					using (var r = new LineReader(_page.LogFile.FullName))
+					{
+						RealScratchPage log = new RealScratchPage(r.ReadLine);
+						_text = log.Text;
+						return _text;
+					}
+				return "";
+			}
+			set { throw new NotImplementedException(); }
+		}
+	}
+
+	public class RealScratchPage : IEphemeralPage
+	{
+		string _text = string.Empty;
+		List<ScratchUpdate> _updates = new List<ScratchUpdate>();
+		int _lastSave;
+
+		public RealScratchPage()
+		{
+		}
+
+		public string Title
+		{
+			get
+			{
+				string text = Text;
+				int newLine = text.IndexOfAny(new[] { '\r', '\n' });
+				if (newLine < 0)
+					return text;
+				return text.Substring(0, newLine);
+			}
+		}
+
+		public RealScratchPage(Func<string> source)
+		{
+			for (; ; )
+			{
+				try
+				{
+					ScratchUpdate up = ScratchUpdate.Load(source);
+					_text = up.Apply(_text, out _, out _);
+					_updates.Add(up);
+				}
+				catch (EndOfStreamException)
+				{
+					break;
+				}
+			}
+			_lastSave = _updates.Count;
+		}
+
+		public void SaveLatest(Action<string> sink)
+		{
+			for (int i = _lastSave; i < _updates.Count; ++i)
+				_updates[i].Save(sink);
+			_lastSave = _updates.Count;
+		}
+
+		public void SaveAll(Action<string> sink)
+		{
+			for (int i = 0; i < _updates.Count; ++i)
+				_updates[i].Save(sink);
+			_lastSave = _updates.Count;
+		}
+
+		public ScratchIterator GetIterator()
+		{
+			return new ScratchIterator(_updates, Text);
+		}
+
+		public string Text
+		{
+			get { return _text; }
+			set
+			{
+				if (_text == value)
+					return;
+				_updates.Add(ScratchUpdate.CalcUpdate(_text, value));
+				_text = value;
+			}
+		}
+
+		public DateTime ChangeStamp
+		{
+			get
+			{
+				if (_updates.Count > 0)
+					return _updates[_updates.Count - 1].Stamp;
+				return DateTime.UtcNow;
+			}
+		}
+	}
+
 	class LineWriter : IDisposable
 	{
 		TextWriter _writer;
@@ -581,9 +799,10 @@ namespace Barrkel.ScratchPad
 		
 		public LineReader(string path)
 		{
+			Console.WriteLine("Opening {0} for read", path);
 			_reader = File.OpenText(path);
 		}
-		
+
 		public string ReadLine()
 		{
 			string line = _reader.ReadLine();
@@ -595,174 +814,6 @@ namespace Barrkel.ScratchPad
 		public void Dispose()
 		{
 			_reader.Dispose();
-		}
-	}
-	
-	public abstract class ScratchPageBase
-	{
-		public abstract ScratchIterator GetIterator();
-		public abstract DateTime CreationStamp
-		{
-			get;
-		}
-		public abstract DateTime ChangeStamp
-		{
-			get;
-		}
-		public abstract string Text
-		{
-			get; set;
-		}
-		public virtual string Title
-		{
-			get
-			{
-				string text = Text;
-				int newLine = text.IndexOfAny(new[] { '\r', '\n' });
-				if (newLine < 0)
-					return text;
-				return text.Substring(0, newLine);
-			}
-		}
-	}
-	
-	public class PhantomScratchPage : ScratchPageBase
-	{
-		ScratchPage _page;
-		string _text;
-		
-		public PhantomScratchPage(ScratchPage page)
-		{
-			_page = page;
-		}
-		
-		public override ScratchIterator GetIterator()
-		{
-			return _page.GetRealImpl().GetIterator();
-		}
-		
-		public override DateTime CreationStamp
-		{
-			get
-			{
-				if (_page.TextFile.Exists)
-					return _page.TextFile.CreationTimeUtc;
-				if (_page.LogFile.Exists)
-					return _page.LogFile.CreationTimeUtc;
-				return DateTime.UtcNow;
-			}
-		}
-		
-		public override DateTime ChangeStamp
-		{
-			get
-			{
-				if (_page.TextFile.Exists)
-					return _page.TextFile.LastWriteTimeUtc;
-				if (_page.LogFile.Exists)
-					return _page.LogFile.LastWriteTimeUtc;
-				return DateTime.UtcNow;
-			}
-		}
-		
-		public override string Text
-		{
-			get
-			{
-				if (_text != null)
-					return _text;
-				if (_page.TextFile.Exists)
-					return File.ReadAllText(_page.TextFile.FullName);
-				if (_page.LogFile.Exists)
-					using (var r = new LineReader(_page.LogFile.FullName))
-					{
-						RealScratchPage log = new RealScratchPage(r.ReadLine);
-						_text = log.Text;
-						return _text;
-					}
-				return "";
-			}
-			set { throw new NotImplementedException(); }
-		}
-	}
-	
-	public class RealScratchPage : ScratchPageBase
-	{
-		string _text = string.Empty;
-		List<ScratchUpdate> _updates = new List<ScratchUpdate>();
-		int _lastSave;
-		
-		public RealScratchPage()
-		{
-		}
-		
-		public RealScratchPage(Func<string> source)
-		{
-			for (;;)
-			{
-				try
-				{
-					ScratchUpdate up = ScratchUpdate.Load(source);
-					_text = up.Apply(_text, out _, out _);
-					_updates.Add(up);
-				}
-				catch (EndOfStreamException)
-				{
-					break;
-				}
-			}
-			_lastSave = _updates.Count;
-		}
-		
-		public void SaveLatest(Action<string> sink)
-		{
-			for (int i = _lastSave; i < _updates.Count; ++i)
-				_updates[i].Save(sink);
-			_lastSave = _updates.Count;
-		}
-		
-		public void SaveAll(Action<string> sink)
-		{
-			for (int i = 0; i < _updates.Count; ++i)
-				_updates[i].Save(sink);
-			_lastSave = _updates.Count;
-		}
-		
-		public override ScratchIterator GetIterator()
-		{
-			return new ScratchIterator(_updates, Text);
-		}
-		
-		public override string Text
-		{
-			get { return _text; }
-			set
-			{
-				if (_text == value)
-					return;
-				_updates.Add(ScratchUpdate.CalcUpdate(_text, value));
-				_text = value;
-			}
-		}
-
-		public override DateTime CreationStamp
-		{
-			get
-			{
-				if (_updates.Count > 0)
-					return _updates[0].Stamp;
-				return DateTime.UtcNow;
-			}
-		}
-		
-		public override DateTime ChangeStamp
-		{
-			get
-			{
-				if (_updates.Count > 0)
-					return _updates[_updates.Count - 1].Stamp;
-				return DateTime.UtcNow;
-			}
 		}
 	}
 	

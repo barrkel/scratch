@@ -226,6 +226,7 @@ namespace Barrkel.GtkScratchPad
 
 		public void EnsureSaved()
 		{
+			Book.EnsureSaved();
 			if (!_dirty)
 				return;
 			if (_currentPage >= Book.Pages.Count)
@@ -369,6 +370,7 @@ namespace Barrkel.GtkScratchPad
 			}
 			else 
 			{
+				Console.WriteLine("Here we are");
 				Console.WriteLine("Not mapped: {0}", evnt.Key);
 			}
 

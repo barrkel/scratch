@@ -91,7 +91,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="BookView.cs" />
-    <Compile Include="TitleSearchWindow.cs" />
+    <Compile Include="SearchWindow.cs" />
     <Compile Include="MainWindow.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Scratch.cs" />

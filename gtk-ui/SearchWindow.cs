@@ -66,14 +66,14 @@ namespace Barrkel.GtkScratchPad
 		}
 	}
 	
-	public class TitleSearchWindow : ModalWindow
+	public class SearchWindow : ModalWindow
 	{
 		TextView _searchTextView;
 		TreeView _searchResultsView;
 		ListStore _searchResultsStore;
 		int _searchResultsStoreCount; // asinine results store
 		
-		public TitleSearchWindow(ISearchable searchable, Settings appSettings) : base("GTK ScratchPad")
+		public SearchWindow(ISearchable searchable, Settings appSettings) : base("GTK ScratchPad")
 		{
 			Searchable = searchable;
 			AppSettings = appSettings;
@@ -82,7 +82,7 @@ namespace Barrkel.GtkScratchPad
 		
 		public static object RunSearch(Window parent, ISearchable searchable, Settings settings)
 		{
-			using (TitleSearchWindow window = new TitleSearchWindow(searchable, settings))
+			using (SearchWindow window = new SearchWindow(searchable, settings))
 			{
 				switch (window.ShowModal(parent))
 				{
