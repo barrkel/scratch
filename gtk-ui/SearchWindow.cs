@@ -2,6 +2,7 @@ using Gtk;
 using Barrkel.ScratchPad;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Barrkel.GtkScratchPad
 {
@@ -11,11 +12,8 @@ namespace Barrkel.GtkScratchPad
 		OK,
 		Cancel
 	}
-	
-	public interface ISearchable
-	{
-		IEnumerable<(string, object)> Search(string text);
-	}
+
+	public delegate IEnumerable<(string, T)> SearchFunc<T>(string text);
 
 	public class ModalWindow : Window, IDisposable
 	{
@@ -65,7 +63,9 @@ namespace Barrkel.GtkScratchPad
 			}
 		}
 	}
-	
+
+	delegate IEnumerable<(string, object)> SearchFunc(string text);
+
 	public class SearchWindow : ModalWindow
 	{
 		TextView _searchTextView;
@@ -73,32 +73,42 @@ namespace Barrkel.GtkScratchPad
 		ListStore _searchResultsStore;
 		int _searchResultsStoreCount; // asinine results store
 		
-		public SearchWindow(ISearchable searchable, Settings appSettings) : base("GTK ScratchPad")
+		SearchWindow(SearchFunc searchFunc, Settings appSettings) : base("GTK ScratchPad")
 		{
-			Searchable = searchable;
+			SearchFunc = searchFunc;
 			AppSettings = appSettings;
 			InitComponent();
 		}
-		
-		public static object RunSearch(Window parent, ISearchable searchable, Settings settings)
+
+		static SearchFunc Polymorphize<T>(SearchFunc<T> generic)
 		{
-			using (SearchWindow window = new SearchWindow(searchable, settings))
+			return text => generic(text).Select(x => (x.Item1, (object)x.Item2));
+		}
+		
+		public static bool RunSearch<T>(Window parent, SearchFunc<T> searchFunc, Settings settings, out T result)
+		{
+			using (SearchWindow window = new SearchWindow(Polymorphize(searchFunc), settings))
 			{
 				switch (window.ShowModal(parent))
 				{
 					case ModalResult.OK:
 						if (window.SelectedItem == null)
-							return null;
-						return window.SelectedItem.Value;
+						{
+							result = default;
+							return false;
+						}
+						result = (T) window.SelectedItem.Value;
+						return true;
 
 					default:
-						return null;
+						result = default;
+						return false;
 				}
 			}
 		}
 		
 		public Settings AppSettings { get; private set; }
-		public ISearchable Searchable { get; private set; }
+		SearchFunc SearchFunc { get; set; }
 		
 		private void InitComponent()
 		{
@@ -155,7 +165,7 @@ namespace Barrkel.GtkScratchPad
 			_searchResultsStore.Clear();
 			_searchResultsStoreCount = 0;
 			
-			foreach (var (title, v) in Searchable.Search(_searchTextView.Buffer.Text))
+			foreach (var (title, v) in SearchFunc(_searchTextView.Buffer.Text))
 			{
 				_searchResultsStore.SetValue(_searchResultsStore.Append(), 0, 
 					new TitleSearchResult(title, _searchResultsStoreCount, v));

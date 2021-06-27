@@ -394,7 +394,7 @@ namespace Barrkel.ScratchPad
 			return true;
 		}
 		
-		public IEnumerable<KeyValuePair<string,int>> SearchTitles(string text)
+		public IEnumerable<(string,int)> SearchTitles(string text)
 		{
 			string[] parts = text.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
 			
@@ -403,17 +403,27 @@ namespace Barrkel.ScratchPad
 				var page = Pages[i];
 				
 				if (IsSearchMatch(page.Title, parts))
-					yield return new KeyValuePair<string,int>(page.Title, i);
+					yield return (page.Title, i);
 			}
 		}
-		
-		public IEnumerable<KeyValuePair<string,int>> SearchTitles(Regex re)
+
+		public IEnumerable<(string, int)> SearchText(Regex re)
+		{
+			for (int i = 0; i < Pages.Count; ++i)
+			{
+				var page = Pages[i];
+				if (re.Match(page.Text).Success)
+					yield return (page.Title, i);
+			}
+		}
+
+		public IEnumerable<(string,int)> SearchTitles(Regex re)
 		{
 			for (int i = 0; i < Pages.Count; ++i)
 			{
 				var page = Pages[i];
 				if (re.Match(page.Title).Success)
-					yield return new KeyValuePair<string,int>(page.Title, i);
+					yield return (page.Title, i);
 			}
 		}
 		
@@ -465,21 +475,18 @@ namespace Barrkel.ScratchPad
 		// Any operations we can perform without loading the full page (mutation or history) should come through here.
 		IReadOnlyPage GetReadOnlyPage()
 		{
-			if (_realImpl != null)
-				return GetRealImpl();
-			// If we only have the log file, we may as well load the whole thing.
-			if (!TextFile.Exists)
-				return GetRealImpl();
-			return GetLiteImpl();
+			if (_realImpl != null || !TextFile.Exists)
+				return GetRealPage();
+			return LoadLiteImplIfNecessary();
 		}
-		
+
 		bool UnderlyingChanged()
 		{
 			return (TextFile.Exists && TextFile.LastWriteTimeUtc != _textStamp)
 				|| (LogFile.Exists && LogFile.LastWriteTimeUtc != _logStamp);
 		}
 		
-		internal RealScratchPage GetRealImpl()
+		internal RealScratchPage GetRealPage()
 		{
 			if (_realImpl == null)
 			{
@@ -496,7 +503,7 @@ namespace Barrkel.ScratchPad
 			return _realImpl;
 		}
 
-		LiteScratchPage GetLiteImpl()
+		LiteScratchPage LoadLiteImplIfNecessary()
 		{
 			if (_liteImpl != null && !UnderlyingChanged())
 				return _liteImpl;
@@ -554,7 +561,7 @@ namespace Barrkel.ScratchPad
 		{
 			if (_realImpl == null)
 				return;
-			RealScratchPage realImpl = GetRealImpl();
+			RealScratchPage realImpl = GetRealPage();
 			using (var w = new LineWriter(LogFile.FullName, FileMode.Append))
 				realImpl.SaveLatest(w.WriteLine);
 			File.WriteAllText(TextFile.FullName, _realImpl.Text);
@@ -562,14 +569,14 @@ namespace Barrkel.ScratchPad
 			_textStamp = TextFile.LastWriteTimeUtc;
 		}
 
-		public ScratchIterator GetIterator() => GetRealImpl().GetIterator();
+		public ScratchIterator GetIterator() => GetRealPage().GetIterator();
 
 		public DateTime ChangeStamp => GetReadOnlyPage().ChangeStamp;
 
 		public string Text
 		{
 			get { return GetReadOnlyPage().Text; }
-			set { GetRealImpl().Text = value; }
+			set { GetRealPage().Text = value; }
 		}
 	}
 

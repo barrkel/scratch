@@ -2,6 +2,8 @@ using Gtk;
 using Barrkel.ScratchPad;
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace Barrkel.GtkScratchPad
 {
@@ -60,37 +62,39 @@ namespace Barrkel.GtkScratchPad
 					switch (args.Event.Key)
 					{
 						case Gdk.Key.F12:
-							currentView.EnsureSaved();
-							object found = SearchWindow.RunSearch(this, ToSearchable(currentView.Book), AppSettings);
-							if (found != null)
-								currentView.JumpToPage((int) found);
-							break;
+							{
+								currentView.EnsureSaved();
+								if (SearchWindow.RunSearch(this, text => currentView.Book.SearchTitles(text).Take(100),
+										AppSettings, out int found))
+								{
+									currentView.JumpToPage(found);
+								}
+								break;
+							}
+
+						case Gdk.Key.F11:
+							{
+								currentView.EnsureSaved();
+								if (SearchWindow.RunSearch(this, text => TrySearch(currentView.Book, text), AppSettings, out int found))
+									currentView.JumpToPage(found);
+								break;
+							}
 					}
 				}
 			};
 		}
 
-		class BookSearchable : ISearchable
+		private IEnumerable<(string, int)> TrySearch(ScratchBook book, string text)
 		{
-			private ScratchBook book;
-
-			public BookSearchable(ScratchBook book)
+			try
 			{
-				this.book = book;
+				Regex regex = new Regex(text, RegexOptions.IgnoreCase);
+				return book.SearchText(regex).Take(100);
 			}
-
-			public IEnumerable<(string, object)> Search(string text)
+			catch (ArgumentException)
 			{
-				foreach (var kv in book.SearchTitles(text))
-				{
-					yield return (kv.Key, kv.Value);
-				}
+				return Enumerable.Empty<(string, int)>();
 			}
-		}
-
-		ISearchable ToSearchable(ScratchBook book)
-		{
-			return new BookSearchable(book);
 		}
 	}
 }
