@@ -423,7 +423,7 @@ namespace Barrkel.ScratchPad
 		}
 	}
 
-	interface IEphemeralPage
+	interface IReadOnlyPage
 	{
 		DateTime ChangeStamp { get; }
 		string Title { get; }
@@ -432,7 +432,7 @@ namespace Barrkel.ScratchPad
 
 	public class ScratchPage
 	{
-		PhantomScratchPage _phantomImpl;
+		LiteScratchPage _liteImpl;
 		RealScratchPage _realImpl;
 		// These timestamps are for detecting out of process modifications to txt and log files
 		DateTime? _logStamp;
@@ -450,7 +450,7 @@ namespace Barrkel.ScratchPad
 			LogFile = new FileInfo(Path.ChangeExtension(_baseName, ".log"));
 		}
 
-		public string Title => _titleCache.Get(_shortName, ChangeStamp, () => this.GetPhantomImpl().Title);
+		public string Title => _titleCache.Get(_shortName, ChangeStamp, () => GetReadOnlyPage().Title);
 
 		internal FileInfo TextFile
 		{
@@ -462,15 +462,15 @@ namespace Barrkel.ScratchPad
 			get; set;
 		}
 
-		IEphemeralPage GetPhantomImpl()
+		// Any operations we can perform without loading the full page (mutation or history) should come through here.
+		IReadOnlyPage GetReadOnlyPage()
 		{
 			if (_realImpl != null)
-				return _realImpl;
+				return GetRealImpl();
+			// If we only have the log file, we may as well load the whole thing.
 			if (!TextFile.Exists)
 				return GetRealImpl();
-			if (_phantomImpl == null)
-				_phantomImpl = new PhantomScratchPage(this);
-			return _phantomImpl;
+			return GetLiteImpl();
 		}
 		
 		bool UnderlyingChanged()
@@ -484,7 +484,7 @@ namespace Barrkel.ScratchPad
 			if (_realImpl == null)
 			{
 				_realImpl = LoadRealImpl();
-				_phantomImpl = null;
+				_liteImpl = null;
 			}
 			else if (UnderlyingChanged())
 			{
@@ -495,7 +495,18 @@ namespace Barrkel.ScratchPad
 			}
 			return _realImpl;
 		}
-		
+
+		LiteScratchPage GetLiteImpl()
+		{
+			if (_liteImpl != null && !UnderlyingChanged())
+				return _liteImpl;
+			_liteImpl = new LiteScratchPage(this);
+			_textStamp = TextFile.LastWriteTimeUtc;
+			if (LogFile.Exists)
+				_logStamp = LogFile.LastWriteTimeUtc;
+			return _liteImpl;
+		}
+
 		RealScratchPage LoadRealImpl()
 		{
 			// Load up a new real implementation from disk.
@@ -523,7 +534,6 @@ namespace Barrkel.ScratchPad
 			// Try getting it from the text file.
 			if (TextFile.Exists)
 			{
-				Console.WriteLine("ScratchPage reading all text in {0}", TextFile.FullName);
 				text = File.ReadAllText(TextFile.FullName);
 				_textStamp = TextFile.LastWriteTimeUtc;
 			}
@@ -554,21 +564,23 @@ namespace Barrkel.ScratchPad
 
 		public ScratchIterator GetIterator() => GetRealImpl().GetIterator();
 
-		public DateTime ChangeStamp => GetPhantomImpl().ChangeStamp;
+		public DateTime ChangeStamp => GetReadOnlyPage().ChangeStamp;
 
 		public string Text
 		{
-			get { return GetPhantomImpl().Text; }
+			get { return GetReadOnlyPage().Text; }
 			set { GetRealImpl().Text = value; }
 		}
 	}
 
-	public class PhantomScratchPage : IEphemeralPage
+	// Lightweight read-only current-version-only view of a page.
+	// Should not be instantiated if we only have the log file, but it'll cope.
+	public class LiteScratchPage : IReadOnlyPage
 	{
 		ScratchPage _page;
 		string _text;
 
-		public PhantomScratchPage(ScratchPage page)
+		public LiteScratchPage(ScratchPage page)
 		{
 			_page = page;
 		}
@@ -605,7 +617,6 @@ namespace Barrkel.ScratchPad
 					return _text;
 				if (_page.TextFile.Exists)
 				{
-					Console.WriteLine("PhantomScratchPage reading all {0}", _page.TextFile.FullName);
 					_text = File.ReadAllText(_page.TextFile.FullName);
 					return _text;
 				}
@@ -622,7 +633,8 @@ namespace Barrkel.ScratchPad
 		}
 	}
 
-	public class RealScratchPage : IEphemeralPage
+	// Full-fat page with navigable history, mutation and change tracking.
+	public class RealScratchPage : IReadOnlyPage
 	{
 		string _text = string.Empty;
 		List<ScratchUpdate> _updates = new List<ScratchUpdate>();
@@ -799,7 +811,6 @@ namespace Barrkel.ScratchPad
 		
 		public LineReader(string path)
 		{
-			Console.WriteLine("Opening {0} for read", path);
 			_reader = File.OpenText(path);
 		}
 
