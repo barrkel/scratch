@@ -182,9 +182,9 @@ namespace Barrkel.GtkScratchPad
 				if (_currentPage >= Book.Pages.Count)
 					_textView.Buffer.Text = "";
 				else if (_currentIterator != null)
-					_textView.Buffer.Text = _currentIterator.Text;
+					_textView.Buffer.Text = NormalizeLines(_currentIterator.Text);
 				else
-					_textView.Buffer.Text = Book.Pages[_currentPage].Text;
+					_textView.Buffer.Text = NormalizeLines(Book.Pages[_currentPage].Text);
 				TextIter iter = _textView.Buffer.GetIterAtOffset(0);
 				_textView.Buffer.SelectRange(iter, iter);
 				_textView.ScrollToIter(iter, 0, false, 0, 0);
@@ -193,6 +193,22 @@ namespace Barrkel.GtkScratchPad
 			{
 				_settingText = false;
 			}
+		}
+
+		private string NormalizeLines(string text)
+		{
+			StringBuilder result = new StringBuilder();
+			int cp = 0;
+			while (cp < text.Length)
+			{
+				char ch = text[cp++];
+				if (ch == '\n' && cp < text.Length && text[cp] == '\r')
+					++cp;
+				else if (ch == '\r' && cp < text.Length && text[cp] == '\n')
+					++cp;
+				result.Append(ch);
+			}
+			return result.ToString();
 		}
 
 		private void UpdateTitle()
