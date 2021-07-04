@@ -141,6 +141,8 @@ namespace Barrkel.GtkScratchPad
 
 	public class BookView : Frame, IScratchBookView
 	{
+		private static readonly Gdk.Atom GlobalClipboard = Gdk.Atom.Intern("CLIPBOARD", false);
+
 		DateTime _lastModification;
 		DateTime _lastSave;
 		bool _dirty;
@@ -156,7 +158,6 @@ namespace Barrkel.GtkScratchPad
 		Label _versionLabel;
 		List<System.Action> _deferred = new List<System.Action>();
 		ScratchBookController _controller;
-		private readonly Gdk.Atom GlobalClipboard = Gdk.Atom.Intern("CLIPBOARD", false);
 
 		public BookView(ScratchBook book, ScratchBookController controller, Settings appSettings)
 		{
@@ -578,6 +579,12 @@ namespace Barrkel.GtkScratchPad
 			get; private set;
 		}
 
+		void IScratchBookView.SetSelection(int from, int to)
+		{
+			_textView.Buffer.MoveMark("insert", _textView.Buffer.GetIterAtOffset(from));
+			_textView.Buffer.MoveMark("selection_bound", _textView.Buffer.GetIterAtOffset(to));
+		}
+
 		string IScratchBookView.CurrentText
 		{
 			get => _textView.Buffer.Text;
@@ -589,6 +596,24 @@ namespace Barrkel.GtkScratchPad
 			{
 				using (Clipboard clip = Clipboard.Get(GlobalClipboard))
 					return clip.WaitForText();
+			}
+		}
+
+		string IScratchBookView.SelectedText
+		{
+			get
+			{
+				_textView.Buffer.GetSelectionBounds(out TextIter start, out TextIter end);
+				return _textView.Buffer.GetText(start, end, true);
+			}
+			set
+			{
+				_textView.Buffer.GetSelectionBounds(out TextIter start, out TextIter end);
+				_textView.Buffer.Delete(ref start, ref end);
+				if (!string.IsNullOrEmpty(value))
+					_textView.Buffer.Insert(ref end, value);
+				start = _textView.Buffer.GetIterAtOffset(end.Offset - value.Length);
+				_textView.Buffer.SelectRange(start, end);
 			}
 		}
 	}

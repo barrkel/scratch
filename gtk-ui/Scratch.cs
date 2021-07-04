@@ -29,6 +29,7 @@ namespace Barrkel.ScratchPad
 		string CurrentText { get; }
 
 		string Clipboard { get; }
+		string SelectedText { get; set; }
 
 		// View should call InvokeAction with actionName every millis milliseconds
 		void AddRepeatingTimer(int millis, string actionName);
@@ -80,6 +81,8 @@ namespace Barrkel.ScratchPad
 			_bindings.Add("F4", "insert-date");
 			_bindings.Add("S-F4", "insert-datetime");
 			_bindings.Add("Return", "autoindent-return");
+			_bindings.Add("Tab", "indent-block");
+			_bindings.Add("S-Tab", "unindent-block");
 			_bindings.Add("C-v", "smart-paste");
 		}
 
@@ -241,10 +244,21 @@ namespace Barrkel.ScratchPad
 			return string.Join("\n", lines);
 		}
 
-		private string AddIndent(string indent, string text)
+		enum IndentOptions
+		{
+			None,
+			SkipFirst,
+			SkipTrailingEmpty
+		}
+
+		private string AddIndent(string indent, string text, IndentOptions options = IndentOptions.None)
 		{
 			string[] lines = text.Split(new[] { '\r', '\n' }, StringSplitOptions.None);
-			for (int i = 1; i < lines.Length; ++i)
+			int firstLine = options == IndentOptions.SkipFirst ? 1 : 0;
+			int lastLine = lines.Length - 1;
+			if (lastLine >= 0 && options == IndentOptions.SkipTrailingEmpty && string.IsNullOrEmpty(lines[lastLine]))
+				--lastLine;
+			for (int i = firstLine; i <= lastLine; ++i)
 			{
 				lines[i] = indent + lines[i];
 			}
@@ -278,6 +292,45 @@ namespace Barrkel.ScratchPad
 			// text has changed
 		}
 
+		[Action("indent-block")]
+		public void DoIndentBlock(IScratchBookView view, string[] _)
+		{
+			string text = view.SelectedText;
+			if (string.IsNullOrEmpty(text))
+			{
+				view.InsertText("  ");
+				return;
+			}
+			view.SelectedText = AddIndent("  ", text, IndentOptions.SkipTrailingEmpty);
+		}
+
+		[Action("unindent-block")]
+		public void DoUnindentBlock(IScratchBookView view, string[] _)
+		{
+			// remove 2 spaces or a tab or one space from every line
+			string text = view.SelectedText;
+			if (string.IsNullOrEmpty(text))
+			{
+				// We insert a literal tab, but we could consider unindenting line.
+				view.InsertText("\t");
+				return;
+			}
+			string[] lines = text.Split('\r', '\n');
+			for (int i = 0; i < lines.Length; ++i)
+			{
+				string line = lines[i];
+				if (line.Length == 0)
+					continue;
+				if (line.StartsWith("  "))
+					lines[i] = line.Substring(2);
+				else if (line.StartsWith("\t"))
+					lines[i] = line.Substring(1);
+				else if (line.StartsWith(" "))
+					lines[i] = line.Substring(1);
+			}
+			view.SelectedText = string.Join("\n", lines);
+		}
+
 		[Action("smart-paste")]
 		public void DoSmartPaste(IScratchBookView view, string[] _)
 		{
@@ -287,10 +340,10 @@ namespace Barrkel.ScratchPad
 			string indent = GetCurrentIndent(view.CurrentText, view.CurrentPosition);
 			if (indent.Length > 0)
 				// Remove existing indent if pasted to an indent
-				view.InsertText(AddIndent(indent, ResetIndent(textToPaste)));
+				view.InsertText(AddIndent(indent, ResetIndent(textToPaste), IndentOptions.SkipFirst));
 			else
 				// Preserve existing indent if from col 0
-				view.InsertText(AddIndent(indent, textToPaste));
+				view.InsertText(AddIndent(indent, textToPaste, IndentOptions.SkipFirst));
 		}
 
 		[Action("autoindent-return")]
