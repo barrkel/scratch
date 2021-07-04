@@ -156,7 +156,8 @@ namespace Barrkel.GtkScratchPad
 		Label _versionLabel;
 		List<System.Action> _deferred = new List<System.Action>();
 		ScratchBookController _controller;
-		
+		private readonly Gdk.Atom GlobalClipboard = Gdk.Atom.Intern("CLIPBOARD", false);
+
 		public BookView(ScratchBook book, ScratchBookController controller, Settings appSettings)
 		{
 			AppSettings = appSettings;
@@ -580,6 +581,15 @@ namespace Barrkel.GtkScratchPad
 		string IScratchBookView.CurrentText
 		{
 			get => _textView.Buffer.Text;
+		}
+
+		string IScratchBookView.Clipboard
+		{
+			get
+			{
+				using (Clipboard clip = Clipboard.Get(GlobalClipboard))
+					return clip.WaitForText();
+			}
 		}
 	}
 }

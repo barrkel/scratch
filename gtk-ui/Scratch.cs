@@ -28,6 +28,8 @@ namespace Barrkel.ScratchPad
 		// Current text in editor, which may be ahead of model (lazy saves).
 		string CurrentText { get; }
 
+		string Clipboard { get; }
+
 		// View should call InvokeAction with actionName every millis milliseconds
 		void AddRepeatingTimer(int millis, string actionName);
 	}
@@ -78,6 +80,7 @@ namespace Barrkel.ScratchPad
 			_bindings.Add("F4", "insert-date");
 			_bindings.Add("S-F4", "insert-datetime");
 			_bindings.Add("Return", "autoindent-return");
+			_bindings.Add("C-v", "smart-paste");
 		}
 
 		public bool TryGetBinding(string key, out string actionName)
@@ -192,22 +195,60 @@ namespace Barrkel.ScratchPad
 			return position;
 		}
 
-		// Extract all whitespace from text[position] up to non-whitespace.
-		private string GetWhitespace(string text, int position)
+		// Extract all whitespace from text[position] up to least(non-whitespace, max).
+		private string GetWhitespace(string text, int position, int max)
 		{
 			int start = position;
-			while (position < text.Length)
-				if (char.IsWhiteSpace(text, position))
+			while (position < text.Length && position < max)
+			{
+				char ch = text[position];
+				if (ch == '\r' || ch == '\n')
+					break;
+				if (char.IsWhiteSpace(ch))
 					++position;
 				else
 					break;
+			}
 			return text.Substring(start, position - start);
 		}
 
 		private string GetCurrentIndent(string text, int position)
 		{
 			int lineStart = GetLineStart(text, position);
-			return GetWhitespace(text, lineStart);
+			return GetWhitespace(text, lineStart, position);
+		}
+
+		private string ResetIndent(string text)
+		{
+			string[] lines = text.Split('\r', '\n');
+			int minIndent = int.MaxValue;
+			// TODO: make this tab-aware
+			foreach (string line in lines)
+			{
+				int indent = GetWhitespace(line, 0, line.Length).Length;
+				// don't count empty lines, or lines with only whitespace
+				if (indent == line.Length)
+					continue;
+				minIndent = Math.Min(minIndent, indent);
+			}
+			if (minIndent == 0)
+				return text;
+			for (int i = 0; i < lines.Length; ++i)
+				if (minIndent >= lines[i].Length)
+					lines[i] = "";
+				else
+					lines[i] = lines[i].Substring(minIndent);
+			return string.Join("\n", lines);
+		}
+
+		private string AddIndent(string indent, string text)
+		{
+			string[] lines = text.Split(new[] { '\r', '\n' }, StringSplitOptions.None);
+			for (int i = 1; i < lines.Length; ++i)
+			{
+				lines[i] = indent + lines[i];
+			}
+			return string.Join("\n", lines);
 		}
 
 		private ScratchPage GetCurrentPage(IScratchBookView view)
@@ -237,10 +278,26 @@ namespace Barrkel.ScratchPad
 			// text has changed
 		}
 
+		[Action("smart-paste")]
+		public void DoSmartPaste(IScratchBookView view, string[] _)
+		{
+			string textToPaste = view.Clipboard;
+			if (string.IsNullOrEmpty(textToPaste))
+				return;
+			string indent = GetCurrentIndent(view.CurrentText, view.CurrentPosition);
+			if (indent.Length > 0)
+				// Remove existing indent if pasted to an indent
+				view.InsertText(AddIndent(indent, ResetIndent(textToPaste)));
+			else
+				// Preserve existing indent if from col 0
+				view.InsertText(AddIndent(indent, textToPaste));
+		}
+
 		[Action("autoindent-return")]
 		public void DoAutoindentReturn(IScratchBookView view, string[] _)
 		{
 			view.InsertText(string.Format("\n{0}", GetCurrentIndent(view.CurrentText, view.CurrentPosition)));
+			view.SetScrollPos(view.CurrentPosition);
 		}
 	}
 
