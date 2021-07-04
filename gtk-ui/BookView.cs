@@ -370,7 +370,6 @@ namespace Barrkel.GtkScratchPad
 			}
 			else 
 			{
-				Console.WriteLine("Here we are");
 				Console.WriteLine("Not mapped: {0}", evnt.Key);
 			}
 
@@ -562,18 +561,25 @@ namespace Barrkel.GtkScratchPad
 			});
 		}
 
-		public int CurrentPosition 
+		public int CurrentPosition
 		{
-			get { return _textView.Buffer.CursorPosition; }
-			set
-			{
-				_textView.Buffer.MoveMark("insert", _textView.Buffer.GetIterAtOffset(value));
-			}
+			get => _textView.Buffer.CursorPosition;
+			set => _textView.Buffer.MoveMark("insert", _textView.Buffer.GetIterAtOffset(value));
+		}
+
+		public int CurrentPageIndex
+		{
+			get => _currentPage;
 		}
 
 		public ScratchBook Book
 		{
 			get; private set;
+		}
+
+		string IScratchBookView.CurrentText
+		{
+			get => _textView.Buffer.Text;
 		}
 	}
 }

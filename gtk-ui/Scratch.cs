@@ -23,6 +23,11 @@ namespace Barrkel.ScratchPad
 		// Ensures position is scrolled into view
 		void SetScrollPos(int pos);
 
+		// 0-based index of current Page in Book; may be equal to Book.Pages.Count for new page.
+		int CurrentPageIndex { get; }
+		// Current text in editor, which may be ahead of model (lazy saves).
+		string CurrentText { get; }
+
 		// View should call InvokeAction with actionName every millis milliseconds
 		void AddRepeatingTimer(int millis, string actionName);
 	}
@@ -72,6 +77,7 @@ namespace Barrkel.ScratchPad
 			// TODO: parse these from a config page
 			_bindings.Add("F4", "insert-date");
 			_bindings.Add("S-F4", "insert-datetime");
+			_bindings.Add("Return", "autoindent-return");
 		}
 
 		public bool TryGetBinding(string key, out string actionName)
@@ -126,6 +132,7 @@ namespace Barrkel.ScratchPad
 
 		public bool InformKeyStroke(IScratchBookView view, string keyName, bool ctrl, bool alt, bool shift)
 		{
+			// Console.WriteLine("Informed keystroke: {0}", keyName);
 			string ctrlPrefix = ctrl ? "C-" : "";
 			string altPrefix = alt ? "M-" : "";
 			// Convention: self-printing keys have a single character. Exceptions are Return and Space.
@@ -139,6 +146,7 @@ namespace Barrkel.ScratchPad
 			{
 				if (RootController.TryGetAction(actionName, out var action))
 				{
+					// Console.WriteLine("Invoking {0}", actionName);
 					action(this, view, EmptyArray<string>.Value);
 					return true;
 				}
@@ -163,6 +171,54 @@ namespace Barrkel.ScratchPad
 			}
 		}
 
+		// Gets the position of the character which starts the line.
+		private int GetLineStart(string text, int position)
+		{
+			// If we are at the "end" of the line in the editor we are also at the start of the next line
+			--position;
+			while (position > 0)
+			{
+				switch (text[position])
+				{
+					case '\r':
+					case '\n':
+						return position + 1;
+
+					default:
+						--position;
+						break;
+				}
+			}
+			return position;
+		}
+
+		// Extract all whitespace from text[position] up to non-whitespace.
+		private string GetWhitespace(string text, int position)
+		{
+			int start = position;
+			while (position < text.Length)
+				if (char.IsWhiteSpace(text, position))
+					++position;
+				else
+					break;
+			return text.Substring(start, position - start);
+		}
+
+		private string GetCurrentIndent(string text, int position)
+		{
+			int lineStart = GetLineStart(text, position);
+			return GetWhitespace(text, lineStart);
+		}
+
+		private ScratchPage GetCurrentPage(IScratchBookView view)
+		{
+			int index = view.CurrentPageIndex;
+			if (index >= Book.Pages.Count)
+				return null;
+			else
+				return Book.Pages[index];
+		}
+
 		[Action("insert-date")]
 		public void DoInsertDate(IScratchBookView view, string[] _)
 		{
@@ -179,6 +235,12 @@ namespace Barrkel.ScratchPad
 		public void OnTextChanged(IScratchBookView view, string[] args)
 		{
 			// text has changed
+		}
+
+		[Action("autoindent-return")]
+		public void DoAutoindentReturn(IScratchBookView view, string[] _)
+		{
+			view.InsertText(string.Format("\n{0}", GetCurrentIndent(view.CurrentText, view.CurrentPosition)));
 		}
 	}
 
