@@ -116,6 +116,9 @@ namespace Barrkel.ScratchPad
 
 	public class ScratchBookController
 	{
+		static readonly char[] SmartChars = { '{', '[', '(' };
+		static readonly char[] SmartInversion = { '}', ']', ')' };
+
 		public ScratchBook Book { get; }
 		public ScratchController RootController { get; }
 
@@ -346,8 +349,29 @@ namespace Barrkel.ScratchPad
 				view.InsertText(AddIndent(indent, textToPaste, IndentOptions.SkipFirst));
 		}
 
-		static readonly char[] SmartChars = { '{', '[', '(' };
-		static readonly char[] SmartInversion = { '}', ']', ')' };
+		private char GetNextNonWhite(string text, int pos)
+		{
+			while (pos < text.Length && char.IsWhiteSpace(text, pos))
+				++pos;
+			if (pos >= text.Length)
+				return '\0';
+			return text[pos];
+		}
+
+		private bool IsSmartDelimiter(string text, int pos, out char closer)
+		{
+			closer = ' ';
+			if (pos < 0 || pos >= text.Length)
+				return false;
+			int smartIndex = Array.IndexOf(SmartChars, text[pos]);
+			if (smartIndex < 0)
+				return false;
+			closer = SmartInversion[smartIndex];
+			if (GetNextNonWhite(text, pos + 1) == closer)
+				return false; // actually we'd like to bump the indent
+
+			return true;
+		}
 
 		[Action("autoindent-return")]
 		public void DoAutoindentReturn(IScratchBookView view, string[] _)
@@ -356,12 +380,8 @@ namespace Barrkel.ScratchPad
 			int pos = view.CurrentPosition;
 			string indent = GetCurrentIndent(text, pos);
 
-			int smartIndex = -1;
-			if (pos < text.Length && pos > 0)
-				smartIndex = Array.IndexOf(SmartChars, text[pos - 1]);
-			if (smartIndex >= 0)
+			if (IsSmartDelimiter(text, pos - 1, out char closer))
 			{
-				char closer = SmartInversion[smartIndex];
 				// smart { etc.
 				view.InsertText(string.Format("\n{0}  \n{0}{1}", indent, closer));
 				view.CurrentPosition -= (1 + indent.Length + 1);
