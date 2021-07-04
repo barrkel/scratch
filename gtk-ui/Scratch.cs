@@ -346,10 +346,29 @@ namespace Barrkel.ScratchPad
 				view.InsertText(AddIndent(indent, textToPaste, IndentOptions.SkipFirst));
 		}
 
+		static readonly char[] SmartChars = { '{', '[', '(' };
+		static readonly char[] SmartInversion = { '}', ']', ')' };
+
 		[Action("autoindent-return")]
 		public void DoAutoindentReturn(IScratchBookView view, string[] _)
 		{
-			view.InsertText(string.Format("\n{0}", GetCurrentIndent(view.CurrentText, view.CurrentPosition)));
+			string text = view.CurrentText;
+			int pos = view.CurrentPosition;
+			string indent = GetCurrentIndent(text, pos);
+
+			int smartIndex = -1;
+			if (pos < text.Length && pos > 0)
+				smartIndex = Array.IndexOf(SmartChars, text[pos - 1]);
+			if (smartIndex >= 0)
+			{
+				char closer = SmartInversion[smartIndex];
+				// smart { etc.
+				view.InsertText(string.Format("\n{0}  \n{0}{1}", indent, closer));
+				view.CurrentPosition -= (1 + indent.Length + 1);
+				view.SetSelection(view.CurrentPosition, view.CurrentPosition);
+			}
+			else
+				view.InsertText(string.Format("\n{0}", indent));
 			view.SetScrollPos(view.CurrentPosition);
 		}
 	}
