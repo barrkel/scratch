@@ -353,7 +353,7 @@ namespace Barrkel.ScratchPad
 				view.InsertText(AddIndent(indent, textToPaste, IndentOptions.SkipFirst));
 		}
 
-		private char GetNextNonWhite(string text, int pos)
+		private char GetNextNonWhite(string text, ref int pos)
 		{
 			while (pos < text.Length && char.IsWhiteSpace(text, pos))
 				++pos;
@@ -362,19 +362,61 @@ namespace Barrkel.ScratchPad
 			return text[pos];
 		}
 
-		private bool IsSmartDelimiter(string text, int pos, out char closer)
+		enum SmartDelimiter
+		{
+			Yes,
+			No,
+			IndentOnly
+		}
+
+		private SmartDelimiter IsSmartDelimiter(string text, int pos, out char closer)
 		{
 			closer = ' ';
 			if (pos < 0 || pos >= text.Length)
-				return false;
+				return SmartDelimiter.No;
 			int smartIndex = Array.IndexOf(SmartChars, text[pos]);
 			if (smartIndex < 0)
-				return false;
+				return SmartDelimiter.No;
 			closer = SmartInversion[smartIndex];
-			if (GetNextNonWhite(text, pos + 1) == closer)
-				return false; // actually we'd like to bump the indent
+			int currIndent = GetIndent(GetCurrentIndent(text, pos));
+			++pos;
+			char nextCh = GetNextNonWhite(text, ref pos);
+			int nextIndent = GetIndent(GetCurrentIndent(text, pos));
+			// foo(|<-- end of file; smart delimiter
+			if (nextCh == '\0')
+				return SmartDelimiter.Yes;
+			// foo(|<-- next indent is equal indent but not a match; new delimeter
+			// blah
+			if (currIndent == nextIndent && nextCh != closer)
+				return SmartDelimiter.Yes;
+			// foo (
+			// ..blah (|<-- next indent is less indented; we want a new delimeter
+			// )
+			//
+			// foo (|<-- next indent is equal indent; no new delimiter but do indent
+			// )
+			//
+			// foo(|<-- next indent is more indented; no new delimeter but do indent
+			//   abc()
+			// )
+			if (nextIndent < currIndent)
+				return SmartDelimiter.Yes;
+			return SmartDelimiter.IndentOnly;
+		}
 
-			return true;
+		private int GetIndent(string text)
+		{
+			int result = 0;
+			foreach (char ch in text)
+			{
+				if (!char.IsWhiteSpace(ch))
+					return result;
+				if (ch == '\t')
+					result += (8 - result % 8);
+				else
+					++result;
+			}
+			return result;
 		}
 
 		[Action("autoindent-return")]
@@ -384,15 +426,23 @@ namespace Barrkel.ScratchPad
 			int pos = view.CurrentPosition;
 			string indent = GetCurrentIndent(text, pos);
 
-			if (IsSmartDelimiter(text, pos - 1, out char closer))
+			switch (IsSmartDelimiter(text, pos - 1, out char closer))
 			{
-				// smart { etc.
-				view.InsertText(string.Format("\n{0}  \n{0}{1}", indent, closer));
-				view.CurrentPosition -= (1 + indent.Length + 1);
-				view.Selection = (view.CurrentPosition, view.CurrentPosition);
+				case SmartDelimiter.No:
+					view.InsertText(string.Format("\n{0}", indent));
+					break;
+
+				case SmartDelimiter.Yes:
+					// smart { etc.
+					view.InsertText(string.Format("\n{0}  \n{0}{1}", indent, closer));
+					view.CurrentPosition -= (1 + indent.Length + 1);
+					view.Selection = (view.CurrentPosition, view.CurrentPosition);
+					break;
+
+				case SmartDelimiter.IndentOnly:
+					view.InsertText(string.Format("\n{0}  ", indent));
+					break;
 			}
-			else
-				view.InsertText(string.Format("\n{0}", indent));
 			view.ScrollIntoView(view.CurrentPosition);
 		}
 
