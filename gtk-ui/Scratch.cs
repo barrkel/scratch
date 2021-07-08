@@ -18,10 +18,14 @@ namespace Barrkel.ScratchPad
 		void InsertText(string text);
 		// Gets 0-based position in text
 		int CurrentPosition { get; set; }
-		// Sets both position and selection, highlighting the text
-		void SetSelection(int from, int to);
-		// Ensures position is scrolled into view
-		void SetScrollPos(int pos);
+		// Get or set the bounds of selected text; first is cursor, second is bound.
+		(int, int) Selection { get; set; }
+
+		// 0-based position in text of first character on visible line at top of view.
+		// Assigning will attempt to set the scroll position so that this character is at the top.
+		int ScrollPos { get; set; }
+		// Ensure 0-based position in text is visible by scrolling if necessary.
+		void ScrollIntoView(int position);
 
 		// 0-based index of current Page in Book; may be equal to Book.Pages.Count for new page.
 		int CurrentPageIndex { get; }
@@ -100,7 +104,7 @@ namespace Barrkel.ScratchPad
 
 	static class EmptyArray<T>
 	{
-		public static readonly T[] Value = new T[0];
+		public static readonly T[] Value = Array.Empty<T>();
 	}
 
 	[AttributeUsage(AttributeTargets.Method, Inherited = false, AllowMultiple = true)]
@@ -385,11 +389,40 @@ namespace Barrkel.ScratchPad
 				// smart { etc.
 				view.InsertText(string.Format("\n{0}  \n{0}{1}", indent, closer));
 				view.CurrentPosition -= (1 + indent.Length + 1);
-				view.SetSelection(view.CurrentPosition, view.CurrentPosition);
+				view.Selection = (view.CurrentPosition, view.CurrentPosition);
 			}
 			else
 				view.InsertText(string.Format("\n{0}", indent));
-			view.SetScrollPos(view.CurrentPosition);
+			view.ScrollIntoView(view.CurrentPosition);
+		}
+
+		private ScratchPage GetPage(int index)
+		{
+			if (index < 0 || index >= Book.Pages.Count)
+				return null;
+			return Book.Pages[index];
+		}
+
+		[Action("exit-page")]
+		public void ExitPage(IScratchBookView view, string[] _)
+		{
+			ScratchPage page = GetPage(view.CurrentPageIndex);
+			if (page == null)
+				return;
+			page.CurrentSelection = view.Selection;
+			page.CurrentScrollPos = view.ScrollPos;
+		}
+
+		[Action("enter-page")]
+		public void EnterPage(IScratchBookView view, string[] _)
+		{
+			ScratchPage page = GetPage(view.CurrentPageIndex);
+			if (page == null)
+				return;
+			if (page.CurrentSelection.HasValue)
+				view.Selection = page.CurrentSelection.Value;
+			if (page.CurrentScrollPos.HasValue)
+				view.ScrollPos = page.CurrentScrollPos.Value;
 		}
 	}
 
@@ -672,6 +705,9 @@ namespace Barrkel.ScratchPad
 		}
 
 		public string Title => _titleCache.Get(_shortName, ChangeStamp, () => GetReadOnlyPage().Title);
+
+		internal (int, int)? CurrentSelection { get; set; }
+		internal int? CurrentScrollPos { get; set; }
 
 		internal FileInfo TextFile
 		{

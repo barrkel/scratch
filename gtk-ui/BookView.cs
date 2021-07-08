@@ -147,7 +147,6 @@ namespace Barrkel.GtkScratchPad
 		DateTime _lastSave;
 		bool _dirty;
 		int _currentPage;
-		string _textContents;
 		// If non-null, then browsing history.
 		ScratchIterator _currentIterator;
 		MyTextView _textView;
@@ -252,7 +251,7 @@ namespace Barrkel.GtkScratchPad
 				Book.AddPage();
 				UpdateViewLabels();
 			}
-			Book.Pages[_currentPage].Text = _textContents;
+			Book.Pages[_currentPage].Text = _textView.Buffer.Text;
 			Book.SaveLatest();
 			_lastSave = DateTime.UtcNow;
 			_dirty = false;
@@ -433,11 +432,8 @@ namespace Barrkel.GtkScratchPad
 			if (!_dirty)
 				_lastSave = DateTime.UtcNow;
 			_lastModification = DateTime.UtcNow;
-			if (_textView.Buffer.Text == "")
+			if (_textView.Buffer.Text == "") {
 				EnsureSaved();
-			_textContents = _textView.Buffer.Text;
-			if (_textContents == "")
-			{
 				_currentPage = Book.Pages.Count;
 				Book.AddPage();
 				UpdateViewLabels();
@@ -481,7 +477,7 @@ namespace Barrkel.GtkScratchPad
 				SetSelection(_currentIterator.UpdatedFrom, _currentIterator.UpdatedTo);
 				// This scroll needs to be deferred to the idle loop
 				// the UI hasn't updated yet and the scroll command is effectively discarded
-				SetScrollPos(_currentIterator.UpdatedFrom);
+				ScrollIntoView(_currentIterator.UpdatedFrom);
 				UpdateViewLabels();
 			}
 		}
@@ -497,7 +493,7 @@ namespace Barrkel.GtkScratchPad
 			{
 				UpdateTextBox();
 				SetSelection(_currentIterator.UpdatedFrom, _currentIterator.UpdatedTo);
-				SetScrollPos(_currentIterator.UpdatedFrom);
+				ScrollIntoView(_currentIterator.UpdatedFrom);
 				UpdateViewLabels();
 			}
 		}
@@ -507,22 +503,20 @@ namespace Barrkel.GtkScratchPad
 			_currentIterator = null;
 			if (_currentPage > 0)
 			{
-				EnsureSaved();
+				ExitPage();
 				--_currentPage;
-				UpdateTextBox();
-				UpdateViewLabels();
+				EnterPage();
 			}
 		}
 
 		void NextPage()
 		{
 			_currentIterator = null;
-			EnsureSaved();
 			if (_currentPage < Book.Pages.Count && Book.Pages[_currentPage].Text != "")
 			{
+				ExitPage();
 				++_currentPage;
-				UpdateTextBox();
-				UpdateViewLabels();
+				EnterPage();
 			}
 		}
 
@@ -530,12 +524,25 @@ namespace Barrkel.GtkScratchPad
 		{
 			if (pageIndex < 0 || pageIndex >= Book.Pages.Count)
 				return;
-			EnsureSaved();
+
+			ExitPage();
 			_currentIterator = null;
 			_currentPage = Book.MoveToEnd(pageIndex);
+			EnterPage();
+		}
+
+		private void ExitPage()
+		{
+			EnsureSaved();
+			_controller.InvokeAction(this, "exit-page", EmptyArray<string>.Value);
+		}
+
+		private void EnterPage()
+		{
 			UpdateTextBox();
 			UpdateTitle();
 			UpdateViewLabels();
+			_controller.InvokeAction(this, "enter-page", EmptyArray<string>.Value);
 		}
 
 		public void InsertText(string text)
@@ -543,13 +550,31 @@ namespace Barrkel.GtkScratchPad
 			_textView.Buffer.InsertAtCursor(text);
 		}
 
-		public void SetScrollPos(int pos)
+		public void ScrollIntoView(int pos)
 		{
 			Defer(() =>
 			{
-				TextIter iter = _textView.Buffer.GetIterAtOffset(pos);
-				_textView.ScrollToIter(iter, 0, false, 0, 0);
+				_textView.ScrollToIter(_textView.Buffer.GetIterAtOffset(pos), 0, false, 0, 0);
 			});
+		}
+
+		public int ScrollPos
+		{
+			get
+			{
+				// Returns the position in the text of location 0,0 at top left of the view
+				_textView.WindowToBufferCoords(TextWindowType.Text, 0, 0, out int x, out int y);
+				TextIter iter = _textView.GetIterAtLocation(x, y);
+				return iter.Offset;
+			}
+			set
+			{
+				Defer(() =>
+				{
+					_textView.ScrollToIter(_textView.Buffer.GetIterAtOffset(int.MaxValue), 0, false, 0, 0);
+					_textView.ScrollToIter(_textView.Buffer.GetIterAtOffset(value), 0, false, 0, 0);
+				});
+			}
 		}
 
 		public void SetSelection(int from, int to)
@@ -595,10 +620,20 @@ namespace Barrkel.GtkScratchPad
 			get; private set;
 		}
 
-		void IScratchBookView.SetSelection(int from, int to)
+
+		(int, int) IScratchBookView.Selection
 		{
-			_textView.Buffer.MoveMark("insert", _textView.Buffer.GetIterAtOffset(from));
-			_textView.Buffer.MoveMark("selection_bound", _textView.Buffer.GetIterAtOffset(to));
+			get
+			{
+				_textView.Buffer.GetSelectionBounds(out var start, out var end);
+				return (start.Offset, end.Offset);
+			}
+			set
+			{
+				var (from, to) = value;
+				_textView.Buffer.MoveMark("insert", _textView.Buffer.GetIterAtOffset(from));
+				_textView.Buffer.MoveMark("selection_bound", _textView.Buffer.GetIterAtOffset(to));
+			}
 		}
 
 		string IScratchBookView.CurrentText
