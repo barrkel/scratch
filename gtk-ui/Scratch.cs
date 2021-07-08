@@ -102,11 +102,6 @@ namespace Barrkel.ScratchPad
 
 	}
 
-	static class EmptyArray<T>
-	{
-		public static readonly T[] Value = Array.Empty<T>();
-	}
-
 	[AttributeUsage(AttributeTargets.Method, Inherited = false, AllowMultiple = true)]
 	public class ActionAttribute : Attribute
 	{
@@ -160,7 +155,7 @@ namespace Barrkel.ScratchPad
 				if (RootController.TryGetAction(actionName, out var action))
 				{
 					// Console.WriteLine("Invoking {0}", actionName);
-					action(this, view, EmptyArray<string>.Value);
+					action(this, view, Array.Empty<string>());
 					return true;
 				}
 			}

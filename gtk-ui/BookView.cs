@@ -534,7 +534,7 @@ namespace Barrkel.GtkScratchPad
 		private void ExitPage()
 		{
 			EnsureSaved();
-			_controller.InvokeAction(this, "exit-page", EmptyArray<string>.Value);
+			_controller.InvokeAction(this, "exit-page", Array.Empty<string>());
 		}
 
 		private void EnterPage()
@@ -542,7 +542,7 @@ namespace Barrkel.GtkScratchPad
 			UpdateTextBox();
 			UpdateTitle();
 			UpdateViewLabels();
-			_controller.InvokeAction(this, "enter-page", EmptyArray<string>.Value);
+			_controller.InvokeAction(this, "enter-page", Array.Empty<string>());
 		}
 
 		public void InsertText(string text)
@@ -599,7 +599,7 @@ namespace Barrkel.GtkScratchPad
 		{
 			GLib.Timeout.Add((uint) millis, () => 
 			{
-				_controller.InvokeAction(this, actionName, EmptyArray<string>.Value);
+				_controller.InvokeAction(this, actionName, Array.Empty<string>());
 				return true; 
 			});
 		}
