@@ -115,6 +115,18 @@ namespace Barrkel.ScratchPad
 
 	public class ScratchBookController
 	{
+		// TODO: Emacs-like text completion with M-/
+		// TODO: bullet mode, somewhat like auto indent; make tabs do similar things
+		// TODO: sigil location search and jump; lines starting with sigil can be jumped to globally
+		//   Canonical example: action items from meetings introduced with => or AI:
+		// TODO: keyword jump from hotkey, to create cross-page linking
+		// TODO: read-only generated pages that e.g. collect sigil lines
+		//   Canonical example: TODO: lines, or discussion items for people; ought to link back
+		// TODO: search over log history
+		// TODO: load key -> action bindings from a note
+		// TODO: move top-level logic (e.g. jumping) to controller
+		// TODO: lightweight scripting for composing new actions
+
 		static readonly char[] SmartChars = { '{', '[', '(' };
 		static readonly char[] SmartInversion = { '}', ']', ')' };
 
