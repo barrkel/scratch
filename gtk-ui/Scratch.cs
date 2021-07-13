@@ -348,6 +348,7 @@ namespace Barrkel.ScratchPad
 		[Action("smart-paste")]
 		public void DoSmartPaste(IScratchBookView view, string[] _)
 		{
+			view.SelectedText = "";
 			string textToPaste = view.Clipboard;
 			if (string.IsNullOrEmpty(textToPaste))
 				return;
@@ -358,6 +359,7 @@ namespace Barrkel.ScratchPad
 			else
 				// Preserve existing indent if from col 0
 				view.InsertText(AddIndent(indent, textToPaste, IndentOptions.SkipFirst));
+			view.ScrollIntoView(view.CurrentPosition);
 		}
 
 		private char GetNextNonWhite(string text, ref int pos)
@@ -466,8 +468,9 @@ namespace Barrkel.ScratchPad
 			ScratchPage page = GetPage(view.CurrentPageIndex);
 			if (page == null)
 				return;
-			page.CurrentSelection = view.Selection;
-			page.CurrentScrollPos = view.ScrollPos;
+			PageViewState state = page.GetViewState(view);
+			state.CurrentSelection = view.Selection;
+			state.CurrentScrollPos = view.ScrollPos;
 		}
 
 		[Action("enter-page")]
@@ -476,10 +479,11 @@ namespace Barrkel.ScratchPad
 			ScratchPage page = GetPage(view.CurrentPageIndex);
 			if (page == null)
 				return;
-			if (page.CurrentSelection.HasValue)
-				view.Selection = page.CurrentSelection.Value;
-			if (page.CurrentScrollPos.HasValue)
-				view.ScrollPos = page.CurrentScrollPos.Value;
+			PageViewState state = page.GetViewState(view);
+			if (state.CurrentSelection.HasValue)
+				view.Selection = state.CurrentSelection.Value;
+			if (state.CurrentScrollPos.HasValue)
+				view.ScrollPos = state.CurrentScrollPos.Value;
 		}
 	}
 
@@ -741,6 +745,12 @@ namespace Barrkel.ScratchPad
 		string Text { get; }
 	}
 
+	internal class PageViewState
+	{
+		public (int, int)? CurrentSelection { get; set; }
+		public int? CurrentScrollPos { get; set; }
+	}
+
 	public class ScratchPage
 	{
 		LiteScratchPage _liteImpl;
@@ -751,7 +761,8 @@ namespace Barrkel.ScratchPad
 		string _baseName;
 		string _shortName;
 		LineCache _titleCache;
-		
+		Dictionary<IScratchBookView, PageViewState> _viewState = new Dictionary<IScratchBookView, PageViewState>();
+
 		public ScratchPage(LineCache titleCache, string baseName)
 		{
 			_baseName = baseName;
@@ -763,8 +774,15 @@ namespace Barrkel.ScratchPad
 
 		public string Title => _titleCache.Get(_shortName, ChangeStamp, () => GetReadOnlyPage().Title);
 
-		internal (int, int)? CurrentSelection { get; set; }
-		internal int? CurrentScrollPos { get; set; }
+		internal PageViewState GetViewState(IScratchBookView view)
+		{
+			if (!_viewState.TryGetValue(view, out var result))
+			{
+				result = new PageViewState();
+				_viewState.Add(view, result);
+			}
+			return result;
+		}
 
 		internal FileInfo TextFile
 		{

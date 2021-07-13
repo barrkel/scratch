@@ -620,7 +620,6 @@ namespace Barrkel.GtkScratchPad
 			get; private set;
 		}
 
-
 		(int, int) IScratchBookView.Selection
 		{
 			get
