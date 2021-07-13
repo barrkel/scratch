@@ -612,7 +612,16 @@ namespace Barrkel.GtkScratchPad
 
 		public int CurrentPageIndex
 		{
-			get => _currentPage;
+			get
+			{
+				// Ensure that any attempt by controller to get page for this view will succeed.
+				if (_currentPage >= Book.Pages.Count)
+				{
+					Book.AddPage();
+					UpdateViewLabels();
+				}
+				return _currentPage;
+			}
 		}
 
 		public ScratchBook Book
@@ -647,6 +656,14 @@ namespace Barrkel.GtkScratchPad
 				using (Clipboard clip = Clipboard.Get(GlobalClipboard))
 					return clip.WaitForText();
 			}
+		}
+
+		void IScratchBookView.DeleteTextBackwards(int count)
+		{
+			int pos = CurrentPosition;
+			TextIter end = _textView.Buffer.GetIterAtOffset(pos);
+			TextIter start = _textView.Buffer.GetIterAtOffset(pos - count);
+			_textView.Buffer.Delete(ref start, ref end);
 		}
 
 		string IScratchBookView.SelectedText

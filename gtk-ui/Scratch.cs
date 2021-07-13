@@ -16,6 +16,8 @@ namespace Barrkel.ScratchPad
 
 		// Inserts text at CurrentPosition
 		void InsertText(string text);
+		// Delete text backwards from CurrentPosition
+		void DeleteTextBackwards(int count);
 		// Gets 0-based position in text
 		int CurrentPosition { get; set; }
 		// Get or set the bounds of selected text; first is cursor, second is bound.
@@ -88,6 +90,7 @@ namespace Barrkel.ScratchPad
 			_bindings.Add("Tab", "indent-block");
 			_bindings.Add("S-Tab", "unindent-block");
 			_bindings.Add("C-v", "smart-paste");
+			_bindings.Add("M-/", "complete");
 		}
 
 		public bool TryGetBinding(string key, out string actionName)
@@ -455,6 +458,98 @@ namespace Barrkel.ScratchPad
 			view.ScrollIntoView(view.CurrentPosition);
 		}
 
+		// starting at position-1, keep going backwards until test fails
+		private string GetStringBackwards(string text, int position, Predicate<char> test)
+		{
+			if (position == 0)
+				return "";
+			if (position > text.Length)
+				position = text.Length;
+			int start = position - 1;
+			while (start >= 0 && start < text.Length && test(text[start]))
+				--start;
+			if (position - start == 0)
+				return "";
+			return text.Substring(start + 1, position - start - 1);
+		}
+
+		// TODO: consider getting completions in a different order; e.g. working backwards from a position
+		private List<string> GetCompletions(string text, Predicate<char> test)
+		{
+			var unique = new HashSet<string>();
+			var result = new List<string>();
+			void add(string candidate)
+			{
+				if (!unique.Contains(candidate))
+				{
+					unique.Add(candidate);
+					result.Add(candidate);
+				}
+			}
+
+			int start = -1;
+			for (int i = 0; i < text.Length; ++i)
+			{
+				if (test(text[i]))
+				{
+					if (start < 0)
+						start = i;
+				}
+				else if (start >= 0)
+				{
+					add(text.Substring(start, i - start));
+					start = -1;
+				}
+			}
+			if (start > 0)
+				add(text.Substring(start, text.Length - start));
+			return result;
+		}
+
+		[Action("complete")]
+		public void CompleteAtPoint(IScratchBookView view, string[] _)
+		{
+			// Emacs-style complete-at-point
+			// foo| -> find symbols starting with foo and complete first found (e.g. 'bar')
+			// foo[bar]| -> after completing [bar], find symbols starting with foo and complete first after 'bar'
+			// If cursor isn't exactly at the end of a completion, we don't resume; we try from scratch.
+			// Completion symbols come from all words ([A-Za-z0-9_-]+) in the document.
+			var page = GetPage(view.CurrentPageIndex);
+			string text = view.CurrentText;
+			var state = page.GetViewState(view);
+			var (currentStart, currentEnd) = state.CurrentCompletion.GetValueOrDefault();
+			var currentPos = view.CurrentPosition;
+			string prefix, suffix;
+			if (currentStart < currentEnd && currentPos == currentEnd)
+			{
+				prefix = GetStringBackwards(text, currentStart, char.IsLetterOrDigit);
+				suffix = text.Substring(currentStart, currentEnd - currentStart);
+			}
+			else
+			{
+				prefix = GetStringBackwards(text, currentPos, char.IsLetterOrDigit);
+				suffix = "";
+				currentStart = currentPos;
+			}
+			List<string> completions = GetCompletions(text, char.IsLetterOrDigit);
+			int currentIndex = completions.IndexOf(prefix + suffix);
+			if (currentIndex == -1)
+				return;
+
+			// find the next completion
+			string nextSuffix = "";
+			for (int i = (currentIndex + 1) % completions.Count; i != currentIndex; i = (i + 1) % completions.Count)
+				if (completions[i].StartsWith(prefix))
+				{
+					nextSuffix = completions[i].Substring(prefix.Length);
+					break;
+				}
+			if (suffix.Length > 0)
+				view.DeleteTextBackwards(suffix.Length);
+			view.InsertText(nextSuffix);
+			state.CurrentCompletion = (currentStart, currentStart + nextSuffix.Length);
+		}
+
 		private ScratchPage GetPage(int index)
 		{
 			if (index < 0 || index >= Book.Pages.Count)
@@ -749,6 +844,8 @@ namespace Barrkel.ScratchPad
 	{
 		public (int, int)? CurrentSelection { get; set; }
 		public int? CurrentScrollPos { get; set; }
+		// [start, end) delimits text inserted in a completion attempt
+		public (int, int)? CurrentCompletion { get; set; }
 	}
 
 	public class ScratchPage
