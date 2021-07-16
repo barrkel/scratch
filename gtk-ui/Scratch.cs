@@ -91,6 +91,9 @@ namespace Barrkel.ScratchPad
 			_bindings.Add("S-Tab", "unindent-block");
 			_bindings.Add("C-v", "smart-paste");
 			_bindings.Add("M-/", "complete");
+			// Biggest upside of this is clobbering select-all binding, not useful in our app
+			_bindings.Add("C-a", "goto-sol");
+			_bindings.Add("C-e", "goto-eol");
 		}
 
 		public bool TryGetBinding(string key, out string actionName)
@@ -209,6 +212,25 @@ namespace Barrkel.ScratchPad
 
 					default:
 						--position;
+						break;
+				}
+			}
+			return position;
+		}
+
+		// Gets the position of the character which ends the line.
+		private int GetLineEnd(string text, int position)
+		{
+			while (position < text.Length)
+			{
+				switch (text[position])
+				{
+					case '\r':
+					case '\n':
+						return position;
+
+					default:
+						++position;
 						break;
 				}
 			}
@@ -456,6 +478,25 @@ namespace Barrkel.ScratchPad
 					break;
 			}
 			view.ScrollIntoView(view.CurrentPosition);
+		}
+
+		[Action("goto-sol")]
+		public void GotoSol(IScratchBookView view, string[] _)
+		{
+			// NOTE: does not extend selection
+			string text = view.CurrentText;
+			int pos = view.CurrentPosition;
+			int sol = GetLineStart(text, pos);
+			view.Selection = (sol, sol);
+		}
+
+		[Action("goto-eol")]
+		public void GotoEol(IScratchBookView view, string[] _)
+		{
+			string text = view.CurrentText;
+			int pos = view.CurrentPosition;
+			int eol = GetLineEnd(text, pos);
+			view.Selection = (eol, eol);
 		}
 
 		// starting at position-1, keep going backwards until test fails
