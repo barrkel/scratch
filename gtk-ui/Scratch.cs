@@ -473,20 +473,13 @@ namespace Barrkel.ScratchPad
 			return text.Substring(start + 1, position - start - 1);
 		}
 
-		// TODO: consider getting completions in a different order; e.g. working backwards from a position
-		private List<string> GetCompletions(string text, Predicate<char> test)
+		private void GetTitleCompletions(Predicate<char> test, Action<string> add)
 		{
-			var unique = new HashSet<string>();
-			var result = new List<string>();
-			void add(string candidate)
-			{
-				if (!unique.Contains(candidate))
-				{
-					unique.Add(candidate);
-					result.Add(candidate);
-				}
-			}
+			Book.TitleCache.EnumerateValues(value => GetTextCompletions(value, test, add));
+		}
 
+		private void GetTextCompletions(string text, Predicate<char> test, Action<string> add)
+		{
 			int start = -1;
 			for (int i = 0; i < text.Length; ++i)
 			{
@@ -503,6 +496,25 @@ namespace Barrkel.ScratchPad
 			}
 			if (start > 0)
 				add(text.Substring(start, text.Length - start));
+		}
+
+		// TODO: consider getting completions in a different order; e.g. working backwards from a position
+		private List<string> GetCompletions(string text, Predicate<char> test)
+		{
+			var unique = new HashSet<string>();
+			var result = new List<string>();
+			void add(string candidate)
+			{
+				if (!unique.Contains(candidate))
+				{
+					unique.Add(candidate);
+					result.Add(candidate);
+				}
+			}
+
+			GetTextCompletions(text, test, add);
+			GetTitleCompletions(test, add);
+
 			return result;
 		}
 
@@ -532,6 +544,7 @@ namespace Barrkel.ScratchPad
 				currentStart = currentPos;
 			}
 			List<string> completions = GetCompletions(text, char.IsLetterOrDigit);
+
 			int currentIndex = completions.IndexOf(prefix + suffix);
 			if (currentIndex == -1)
 				return;
@@ -619,7 +632,7 @@ namespace Barrkel.ScratchPad
 		}
 	}
 
-	// Simple text:text cache with timestamp-based invalidation.
+	// Simple text key to text value cache with timestamp-based invalidation.
 	public class LineCache
 	{
 		string _storeFile;
@@ -687,13 +700,18 @@ namespace Barrkel.ScratchPad
 			_cache[name] = (timestamp, line);
 			_dirty = true;
 		}
+
+		public void EnumerateValues(Action<string> callback)
+		{
+			foreach (var (_, line) in _cache.Values)
+				callback(line);
+		}
 	}
 
 	public class ScratchBook
 	{
 		List<ScratchPage> _pages = new List<ScratchPage>();
 		string _rootDirectory;
-		LineCache _titleCache;
 
 		public ScratchBook(string rootDirectory)
 		{
@@ -701,14 +719,16 @@ namespace Barrkel.ScratchPad
 			_rootDirectory = rootDirectory;
 			UnixLineEndings = File.Exists(Path.Combine(rootDirectory, ".unix"));
 			var root = new DirectoryInfo(rootDirectory);
-			_titleCache = new LineCache(Path.Combine(_rootDirectory, "title_cache.text"));
+			TitleCache = new LineCache(Path.Combine(_rootDirectory, "title_cache.text"));
 			_pages.AddRange(root.GetFiles("*.txt")
 				.Union(root.GetFiles("*.log"))
 				.OrderBy(f => f.LastWriteTimeUtc)
 				.Select(f => Path.ChangeExtension(f.FullName, null))
 				.Distinct()
-				.Select(name => new ScratchPage(_titleCache, name)));
+				.Select(name => new ScratchPage(TitleCache, name)));
 		}
+
+		internal LineCache TitleCache { get; }
 
 		public bool UnixLineEndings { get; }
 
@@ -749,7 +769,7 @@ namespace Barrkel.ScratchPad
 		
 		public ScratchPage AddPage()
 		{
-			ScratchPage result = new ScratchPage(_titleCache, FindNewPageBaseName());
+			ScratchPage result = new ScratchPage(TitleCache, FindNewPageBaseName());
 			_pages.Add(result);
 			return result;
 		}
@@ -757,7 +777,7 @@ namespace Barrkel.ScratchPad
 		// This is called periodically, and on every modification.
 		public void EnsureSaved()
 		{
-			_titleCache.Save();
+			TitleCache.Save();
 		}
 
 		// This is only called if content has been modified.
