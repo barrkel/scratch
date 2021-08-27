@@ -9,6 +9,26 @@ using System.Reflection;
 
 namespace Barrkel.ScratchPad
 {
+	public class Options
+	{
+		public Options(List<string> args)
+		{
+			DebugKeys = ParseFlag(args, "debug-keys");
+		}
+
+		static bool MatchFlag(string arg, string name)
+		{
+			return arg == "--" + name;
+		}
+
+		static bool ParseFlag(List<string> args, string name)
+		{
+			return args.RemoveAll(arg => MatchFlag(arg, name)) > 0;
+		}
+
+		public bool DebugKeys;
+	}
+
 	public interface IScratchBookView
 	{
 		// Get the book this view is for; the view only ever shows a single page from a book
@@ -55,6 +75,11 @@ namespace Barrkel.ScratchPad
 		Dictionary<ScratchBook, ScratchBookController> _controllerMap = new Dictionary<ScratchBook, ScratchBookController>();
 
 		public ScratchRoot Root { get; }
+
+		public Options Options
+		{
+			get => Root.Options;
+		}
 
 		public ScratchBookController GetControllerFor(ScratchBook book)
 		{
@@ -166,6 +191,9 @@ namespace Barrkel.ScratchPad
 			string shiftPrefix = (keyName.Length > 1 && shift) ? "S-" : "";
 			string key = string.Concat(ctrlPrefix, altPrefix, shiftPrefix, keyName);
 
+			if (RootController.Options.DebugKeys)
+				Console.WriteLine("debug-keys: {0}", key);
+
 			// TODO: consider page / book-specific binds and actions
 			// This is modal behaviour, a direction we probably don't need to go in
 			if (RootController.TryGetBinding(key, out var actionName))
@@ -200,6 +228,8 @@ namespace Barrkel.ScratchPad
 		// Gets the position of the character which starts the line.
 		private int GetLineStart(string text, int position)
 		{
+			if (position == 0)
+				return 0;
 			// If we are at the "end" of the line in the editor we are also at the start of the next line
 			--position;
 			while (position > 0)
@@ -556,6 +586,7 @@ namespace Barrkel.ScratchPad
 			GetTextCompletions(text, test, add);
 			GetTitleCompletions(test, add);
 
+			result.ForEach(Console.WriteLine);
 			return result;
 		}
 
@@ -643,8 +674,9 @@ namespace Barrkel.ScratchPad
 	{
 		readonly List<ScratchBook> _books;
 
-		public ScratchRoot(string rootDirectory)
+		public ScratchRoot(Options options, string rootDirectory)
 		{
+			Options = options;
 			_books = new List<ScratchBook>();
 			Books = new ReadOnlyCollection<ScratchBook>(_books);
 			RootDirectory = rootDirectory;
@@ -652,7 +684,9 @@ namespace Barrkel.ScratchPad
 			foreach (string dir in Directory.GetDirectories(rootDirectory))
 				_books.Add(new ScratchBook(dir));
 		}
-		
+
+		public Options Options { get; }
+
 		public string RootDirectory { get; }
 
 		public ReadOnlyCollection<ScratchBook> Books { get; }

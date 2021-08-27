@@ -246,8 +246,11 @@ namespace Barrkel.GtkScratchPad
 			Book.EnsureSaved();
 			if (!_dirty)
 				return;
+			string currentText = _textView.Buffer.Text;
 			if (_currentPage >= Book.Pages.Count)
 			{
+				if (currentText == "")
+					return;
 				Book.AddPage();
 				UpdateViewLabels();
 			}
@@ -615,7 +618,7 @@ namespace Barrkel.GtkScratchPad
 			get
 			{
 				// Ensure that any attempt by controller to get page for this view will succeed.
-				if (_currentPage >= Book.Pages.Count)
+				if (_currentPage >= Book.Pages.Count && _textView.Buffer.Text != "")
 				{
 					Book.AddPage();
 					UpdateViewLabels();

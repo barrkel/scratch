@@ -8,7 +8,6 @@ namespace Barrkel.GtkScratchPad
 {
 	static class Program
 	{
-
 		public static int Main(string[] args)
 		{
 			try
@@ -24,8 +23,11 @@ namespace Barrkel.GtkScratchPad
 			}
 		}
 
-		public static int AppMain(string[] args)
+		public static int AppMain(string[] argArray)
 		{
+			List<string> args = new List<string>(argArray);
+			Options options = new Options(args);
+
 			string settingsFile = Path.ChangeExtension(Environment.GetCommandLineArgs()[0], ".settings");
 			Settings settings;
 			if (File.Exists(settingsFile))
@@ -33,16 +35,17 @@ namespace Barrkel.GtkScratchPad
 					settings = new Settings(reader);
 			else
 				settings = new Settings();
-			
-			Application.Init("GtkScratchPad", ref args);
-			
-			if (args.Length != 1)
+
+			string[] stub = Array.Empty<string>();
+			Application.Init("GtkScratchPad", ref stub);
+
+			if (args.Count != 1)
 			{
 				Console.WriteLine("Expected argument: storage directory");
 				return 1;
 			}
 
-			ScratchRoot root = new ScratchRoot(args[0]);
+			ScratchRoot root = new ScratchRoot(options, args[0]);
 			MainWindow window = new MainWindow(root, settings);
 			window.ShowAll();
 			
