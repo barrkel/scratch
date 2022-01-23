@@ -158,9 +158,10 @@ namespace Barrkel.GtkScratchPad
 		List<System.Action> _deferred = new List<System.Action>();
 		ScratchBookController _controller;
 
-		public BookView(ScratchBook book, ScratchBookController controller, Settings appSettings)
+		public BookView(ScratchBook book, ScratchBookController controller, Settings appSettings, Window appWindow)
 		{
 			AppSettings = appSettings;
+			AppWindow = appWindow;
 			Book = book;
 			InitComponent();
 			_currentPage = book.Pages.Count > 0 ? book.Pages.Count - 1 : 0;
@@ -171,6 +172,7 @@ namespace Barrkel.GtkScratchPad
 			_controller.ConnectView(this);
 		}
 		
+		public Window AppWindow { get; private set; }
 		public Settings AppSettings { get; private set; }
 		
 		private void UpdateTextBox()
@@ -667,6 +669,11 @@ namespace Barrkel.GtkScratchPad
 			TextIter end = _textView.Buffer.GetIterAtOffset(pos);
 			TextIter start = _textView.Buffer.GetIterAtOffset(pos - count);
 			_textView.Buffer.Delete(ref start, ref end);
+		}
+
+		public bool RunSearch<T>(ScratchPad.SearchFunc<T> searchFunc, out T result)
+		{
+			return SearchWindow.RunSearch(AppWindow, searchFunc.Invoke, AppSettings, out result);
 		}
 
 		string IScratchBookView.SelectedText

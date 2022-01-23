@@ -29,6 +29,8 @@ namespace Barrkel.ScratchPad
 		public bool DebugKeys;
 	}
 
+	public delegate IEnumerable<(string, T)> SearchFunc<T>(string text);
+
 	public interface IScratchBookView
 	{
 		// Get the book this view is for; the view only ever shows a single page from a book
@@ -59,6 +61,12 @@ namespace Barrkel.ScratchPad
 
 		// View should call InvokeAction with actionName every millis milliseconds
 		void AddRepeatingTimer(int millis, string actionName);
+
+		// Show a search dialog with text box, list box and ok/cancel buttons.
+		// List box is populated from result of searchFunc applied to contents of text box.
+		// Returns true if OK clicked and item in list box selected, with associated T in result.
+		// Returns false if Cancel clicked or search otherwise cancelled (Esc).
+		bool RunSearch<T>(SearchFunc<T> searchFunc, out T result);
 	}
 
 	// Controller for behaviour. UI should receive this and send keystrokes and events to it, along with view callbacks.
@@ -119,6 +127,7 @@ namespace Barrkel.ScratchPad
 			// Biggest upside of this is clobbering select-all binding, not useful in our app
 			_bindings.Add("C-a", "goto-sol");
 			_bindings.Add("C-e", "goto-eol");
+			_bindings.Add("M-o", "occur");
 		}
 
 		public bool TryGetBinding(string key, out string actionName)
@@ -508,6 +517,105 @@ namespace Barrkel.ScratchPad
 					break;
 			}
 			view.ScrollIntoView(view.CurrentPosition);
+		}
+
+		private const int DefaultContextLength = 20;
+
+		static string Contextualize(string line, Match match, int contextLength = DefaultContextLength)
+		{
+			StringBuilder result = new StringBuilder();
+			// ... preamble [match] postamble ...
+			if (match.Index > contextLength)
+			{
+				result.Append("...");
+				result.Append(line.Substring(match.Index - contextLength + 3, contextLength - 3));
+			}
+			else
+			{
+				result.Append(line.Substring(0, match.Index));
+			}
+			result.Append('[').Append(match.Value).Append(']');
+			if (match.Index + match.Length + contextLength < line.Length)
+			{
+				result.Append(line.Substring(match.Index + match.Length, contextLength - 3));
+				result.Append("...");
+			}
+			else
+			{
+				result.Append(line.Substring(match.Index + match.Length));
+			}
+			return result.ToString();
+		}
+
+		static IEnumerable<(string, (int, int))> FindMatchingLocations(List<(int, string)> lines, string pattern)
+		{
+			Regex regex = new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
+			int count = 0;
+			int linum = 0;
+			while (count < 100 && linum < lines.Count)
+			{
+				var (lineOfs, line) = lines[linum];
+				++linum;
+
+				// Default case: empty pattern. Special case this one, we don't need to split every character.
+				if (pattern.Length == 0)
+				{
+					++count;
+					yield return (line, (lineOfs, 0));
+					continue;
+				}
+
+				var matches = regex.Matches(line);
+				if (matches.Count == 0)
+					continue;
+				count += matches.Count;
+				// if multiple matches in a line, break them out
+				// if a single match, keep as is
+				string prefix = "";
+				if (matches.Count > 1)
+				{
+					prefix = "   ";
+					yield return (line, (lineOfs + matches[0].Index, matches[0].Length));
+				}
+				foreach (Match match in matches)
+				{
+					yield return (prefix + Contextualize(line, match), (lineOfs + match.Index, match.Length));
+				}
+			}
+		}
+
+		static IEnumerable<(int, string)> GetNonEmptyLines(string text)
+		{
+			int pos = 0;
+			while (pos < text.Length)
+			{
+				char ch = text[pos];
+				int start = pos;
+				++pos;
+				if (ch == '\n' || ch == '\r' || pos == text.Length)
+					continue;
+
+				while (pos < text.Length)
+				{
+					ch = text[pos];
+					++pos;
+					if (ch == '\n' || ch == '\r')
+						break;
+				}
+				yield return (start, text.Substring(start, pos - start - 1));
+			}
+		}
+
+		[Action("occur")]
+		public void Occur(IScratchBookView view, string[] _)
+		{
+			var lines = GetNonEmptyLines(view.CurrentText).ToList();
+			if (view.RunSearch(regex => FindMatchingLocations(lines, regex), out var pair))
+			{
+				var (pos, len) = pair;
+				view.ScrollIntoView(pos);
+				view.Selection = (pos, pos + len);
+			}
 		}
 
 		[Action("goto-sol")]

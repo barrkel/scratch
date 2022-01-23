@@ -33,7 +33,7 @@ namespace Barrkel.GtkScratchPad
 			foreach (var book in Root.Books)
 			{
 				ScratchBookController controller = RootController.GetControllerFor(book);
-				BookView view = new BookView(book, controller, AppSettings);
+				BookView view = new BookView(book, controller, AppSettings, this);
 				views.Add(view);
 				Label viewLabel = new Label { Text = book.ToString() };
 				viewLabel.SetPadding(10, 2);
