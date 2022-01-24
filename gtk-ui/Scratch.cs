@@ -67,6 +67,11 @@ namespace Barrkel.ScratchPad
 		// Returns true if OK clicked and item in list box selected, with associated T in result.
 		// Returns false if Cancel clicked or search otherwise cancelled (Esc).
 		bool RunSearch<T>(SearchFunc<T> searchFunc, out T result);
+
+		// Before invoking cross-page navigation, call this.
+		void EnsureSaved();
+		// Jump to page by index in Book.
+		void JumpToPage(int page);
 	}
 
 	// Controller for behaviour. UI should receive this and send keystrokes and events to it, along with view callbacks.
@@ -128,6 +133,8 @@ namespace Barrkel.ScratchPad
 			_bindings.Add("C-a", "goto-sol");
 			_bindings.Add("C-e", "goto-eol");
 			_bindings.Add("M-o", "occur");
+			_bindings.Add("F12", "navigate-title");
+			_bindings.Add("F11", "navigate-contents");
 		}
 
 		public bool TryGetBinding(string key, out string actionName)
@@ -519,8 +526,10 @@ namespace Barrkel.ScratchPad
 			view.ScrollIntoView(view.CurrentPosition);
 		}
 
-		private const int DefaultContextLength = 20;
+		private const int DefaultContextLength = 40;
 
+		// Given a line and a match, add prefix and postfix text as necessary, and mark up match with [].
+		// This logic is sufficiently UI-specific that it should be factored out somehow.
 		static string Contextualize(string line, Match match, int contextLength = DefaultContextLength)
 		{
 			StringBuilder result = new StringBuilder();
@@ -547,9 +556,9 @@ namespace Barrkel.ScratchPad
 			return result.ToString();
 		}
 
-		static IEnumerable<(string, (int, int))> FindMatchingLocations(List<(int, string)> lines, string pattern)
+		// Given a list of (lineOffset, line) and a pattern, return UI-suitable strings with associated (offset, length) pairs.
+		static IEnumerable<(string, (int, int))> FindMatchingLocations(List<(int, string)> lines, Regex regex)
 		{
-			Regex regex = new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
 			int count = 0;
 			int linum = 0;
 			while (count < 100 && linum < lines.Count)
@@ -558,7 +567,7 @@ namespace Barrkel.ScratchPad
 				++linum;
 
 				// Default case: empty pattern. Special case this one, we don't need to split every character.
-				if (pattern.Length == 0)
+				if (regex.IsMatch(""))
 				{
 					++count;
 					yield return (line, (lineOfs, 0));
@@ -584,6 +593,8 @@ namespace Barrkel.ScratchPad
 			}
 		}
 
+		// Returns (lineOffset, line) without trailing line separators.
+		// lineOffset is the character offset of the start of the line in text.
 		static IEnumerable<(int, string)> GetNonEmptyLines(string text)
 		{
 			int pos = 0;
@@ -610,11 +621,75 @@ namespace Barrkel.ScratchPad
 		public void Occur(IScratchBookView view, string[] _)
 		{
 			var lines = GetNonEmptyLines(view.CurrentText).ToList();
-			if (view.RunSearch(regex => FindMatchingLocations(lines, regex), out var pair))
+			if (view.RunSearch(pattern => FindMatchingLocations(lines, 
+				new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline)), 
+				out var pair))
 			{
 				var (pos, len) = pair;
 				view.ScrollIntoView(pos);
 				view.Selection = (pos, pos + len);
+			}
+		}
+
+		[Action("navigate-title")]
+		public void NavigateTitle(IScratchBookView view, string[] _)
+		{
+			view.EnsureSaved();
+			if (view.RunSearch(text => Book.SearchTitles(text).Take(100), out int found))
+				view.JumpToPage(found);
+		}
+
+		[Action("navigate-contents")]
+		public void NavigateContents(IScratchBookView view, string[] _)
+		{
+			view.EnsureSaved();
+			if (view.RunSearch(text => TrySearch(Book, text).Take(50), out var triple))
+			{
+				var (page, pos, len) = triple;
+				view.JumpToPage(page);
+				// these should probably be part of JumpToPage, to avoid the default action
+				view.ScrollIntoView(pos);
+				view.Selection = (pos, pos + len);
+			}
+		}
+
+		// returns (UI line, (page, pos, len))
+		private IEnumerable<(string, (int, int, int))> TrySearch(ScratchBook book, string pattern)
+		{
+			Regex re;
+			try
+			{
+				re = new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
+			}
+			catch (ArgumentException)
+			{
+				yield break;
+			}
+
+			for (int i = 0; i < Book.Pages.Count; ++i)
+			{
+				var page = Book.Pages[i];
+				if (!re.Match(page.Text).Success)
+					continue;
+
+				if (pattern.Length == 0)
+				{
+					yield return (page.Title, (i, 0, 0));
+					continue;
+				}
+
+				var lines = GetNonEmptyLines(page.Text).ToList();
+				bool isFirst = true;
+				foreach (var match in FindMatchingLocations(lines, re))
+				{
+					var (uiLine, (pos, len)) = match;
+					if (isFirst)
+					{
+						yield return (page.Title, (i, 0, 0));
+						isFirst = false;
+					}
+					yield return (">>> " + uiLine, (i, pos, len));
+				}
 			}
 		}
 
