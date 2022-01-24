@@ -116,6 +116,9 @@ namespace Barrkel.GtkScratchPad
 			// this comes out with S-Tab
 			result.Add(Gdk.Key.ISO_Left_Tab, "Tab");
 
+			result.Add(Gdk.Key.L1, "F11");
+			result.Add(Gdk.Key.L2, "F12");
+
 			return result;
 		}
 	}
