@@ -135,6 +135,7 @@ namespace Barrkel.ScratchPad
 			_bindings.Add("M-o", "occur");
 			_bindings.Add("F12", "navigate-title");
 			_bindings.Add("F11", "navigate-contents");
+			_bindings.Add("C-t", "navigate-todo");
 		}
 
 		public bool TryGetBinding(string key, out string actionName)
@@ -653,8 +654,36 @@ namespace Barrkel.ScratchPad
 			}
 		}
 
+		[Action("navigate-todo")]
+		public void NavigateTodo(IScratchBookView view, string[] _)
+		{
+			NavigateSigil(view, "=>");
+		}
+
+		private void NavigateSigil(IScratchBookView view, string sigil)
+		{
+			view.EnsureSaved();
+			if (view.RunSearch(text => TrySearch(Book, $"^\\s*{Regex.Escape(sigil)}.*{text}", 
+				SearchOptions.TitleLinkToFirstResult).Take(50), out var triple))
+			{
+				var (page, pos, len) = triple;
+				view.JumpToPage(page);
+				// these should probably be part of JumpToPage, to avoid the default action
+				view.ScrollIntoView(pos);
+				view.Selection = (pos, pos + len);
+			}
+		}
+
+		[Flags]
+		enum SearchOptions
+		{
+			None = 0,
+			TitleLinkToFirstResult = 1
+		}
+
 		// returns (UI line, (page, pos, len))
-		private IEnumerable<(string, (int, int, int))> TrySearch(ScratchBook book, string pattern)
+		private IEnumerable<(string, (int, int, int))> TrySearch(ScratchBook book, string pattern, 
+			SearchOptions options = SearchOptions.None)
 		{
 			Regex re;
 			try
@@ -685,10 +714,17 @@ namespace Barrkel.ScratchPad
 					var (uiLine, (pos, len)) = match;
 					if (isFirst)
 					{
-						yield return (page.Title, (i, 0, 0));
+						if (options.HasFlag(SearchOptions.TitleLinkToFirstResult))
+						{
+							yield return (page.Title, (i, pos, len));
+						}
+						else
+						{
+							yield return (page.Title, (i, 0, 0));
+						}
 						isFirst = false;
 					}
-					yield return (">>> " + uiLine, (i, pos, len));
+					yield return ("    " + uiLine, (i, pos, len));
 				}
 			}
 		}
