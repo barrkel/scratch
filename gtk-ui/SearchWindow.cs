@@ -75,6 +75,7 @@ namespace Barrkel.GtkScratchPad
 		TextView _searchTextView;
 		TreeView _searchResultsView;
 		ListStore _searchResultsStore;
+		TreeViewColumn _valueColumn;
 		int _searchResultsStoreCount; // asinine results store
 		
 		SearchWindow(SearchFunc searchFunc, Settings appSettings) : base("GTK ScratchPad")
@@ -136,20 +137,20 @@ namespace Barrkel.GtkScratchPad
 			_searchResultsStore = new ListStore(typeof(TitleSearchResult));
 			
 			_searchResultsView = new TreeView(_searchResultsStore);
-			TreeViewColumn column = new TreeViewColumn();
-			column.Title = "Value";
+			_valueColumn = new TreeViewColumn();
+			_valueColumn.Title = "Value";
 			var valueRenderer = new CellRendererText();
-			column.PackStart(valueRenderer, true);
-			column.SetCellDataFunc(valueRenderer, (TreeViewColumn col, CellRenderer cell, TreeModel model, TreeIter iter) => 
+			_valueColumn.PackStart(valueRenderer, true);
+			_valueColumn.SetCellDataFunc(valueRenderer, (TreeViewColumn col, CellRenderer cell, TreeModel model, TreeIter iter) => 
 			{
 				TitleSearchResult item = (TitleSearchResult) model.GetValue(iter, 0);
 				((CellRendererText)cell).Text = item.Title;
 			});
-			_searchResultsView.AppendColumn(column);
-			
+			_searchResultsView.AppendColumn(_valueColumn);
 			
 			_searchResultsView.ModifyBase(StateType.Normal, lightBlue);
 			_searchResultsView.ButtonPressEvent += _searchResultsView_ButtonPressEvent;
+			_searchResultsView.KeyPressEvent += _searchResultsView_KeyPressEvent;
 			
 			var scrolledResults = new ScrolledWindow();
 			scrolledResults.Add(_searchResultsView);
@@ -207,6 +208,7 @@ namespace Barrkel.GtkScratchPad
 					return;
 				
 				selection.SelectIter(iter);
+				_searchResultsView.ScrollToCell(_searchResultsStore.GetPath(iter), null, false, 0, 0);
 			}
 		}
 		
@@ -214,9 +216,8 @@ namespace Barrkel.GtkScratchPad
 		{
 			get
 			{
-				TreeIter iter;
-				if (_searchResultsView.Selection.GetSelected(out iter))
-					return (TitleSearchResult) _searchResultsStore.GetValue(iter, 0);
+				if (_searchResultsView.Selection.GetSelected(out TreeIter iter))
+					return (TitleSearchResult)_searchResultsStore.GetValue(iter, 0);
 				return null;
 			}
 		}
@@ -229,6 +230,12 @@ namespace Barrkel.GtkScratchPad
 			switch (args.Event.Key)
 			{
 				case Gdk.Key.Return:
+					if (_searchResultsStoreCount > 0)
+					{
+						if (selectedIndex <= 0)
+							selectedIndex = 0;
+						SelectedIndex = selectedIndex;
+					}
 					ModalResult = ModalResult.OK;
 					args.RetVal = true;
 					break;
@@ -254,6 +261,24 @@ namespace Barrkel.GtkScratchPad
 							selectedIndex = _searchResultsStoreCount - 1;
 						SelectedIndex = selectedIndex;
 					}
+					break;
+			}
+		}
+
+		private void _searchResultsView_KeyPressEvent(object o, KeyPressEventArgs args)
+		{
+			int selectedIndex = SelectedIndex;
+			switch (args.Event.Key)
+			{
+				case Gdk.Key.Return:
+					if (_searchResultsStoreCount > 0)
+					{
+						if (selectedIndex <= 0)
+							selectedIndex = 0;
+						SelectedIndex = selectedIndex;
+					}
+					ModalResult = ModalResult.OK;
+					args.RetVal = true;
 					break;
 			}
 		}
