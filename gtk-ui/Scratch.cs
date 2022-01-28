@@ -531,53 +531,123 @@ namespace Barrkel.ScratchPad
 
 		// Given a line and a match, add prefix and postfix text as necessary, and mark up match with [].
 		// This logic is sufficiently UI-specific that it should be factored out somehow.
-		static string Contextualize(string line, Match match, int contextLength = DefaultContextLength)
+		static string Contextualize(string line, SimpleMatch match, int contextLength = DefaultContextLength)
 		{
 			StringBuilder result = new StringBuilder();
 			// ... preamble [match] postamble ...
-			if (match.Index > contextLength)
+			if (match.Start > contextLength)
 			{
 				result.Append("...");
-				result.Append(line.Substring(match.Index - contextLength + 3, contextLength - 3));
+				result.Append(line.Substring(match.Start - contextLength + 3, contextLength - 3));
 			}
 			else
 			{
-				result.Append(line.Substring(0, match.Index));
+				result.Append(line.Substring(0, match.Start));
 			}
 			result.Append('[').Append(match.Value).Append(']');
-			if (match.Index + match.Length + contextLength < line.Length)
+			if (match.End + contextLength < line.Length)
 			{
-				result.Append(line.Substring(match.Index + match.Length, contextLength - 3));
+				result.Append(line.Substring(match.End, contextLength - 3));
 				result.Append("...");
 			}
 			else
 			{
-				result.Append(line.Substring(match.Index + match.Length));
+				result.Append(line.Substring(match.End));
 			}
 			return result.ToString();
 		}
 
+		struct SimpleMatch
+		{
+			public SimpleMatch(string text, Match match)
+			{
+				Text = text;
+				if (!match.Success)
+				{
+					Start = 0;
+					End = -1;
+				}
+				else
+				{
+					Start = match.Index;
+					End = match.Index + match.Value.Length;
+				}
+			}
+
+			private SimpleMatch(string text, int start, int end)
+			{
+				Start = start;
+				End = end;
+				Text = text;
+			}
+
+			public SimpleMatch Extend(SimpleMatch other)
+			{
+				if (!object.ReferenceEquals(Text, other.Text))
+					throw new ArgumentException("Extend may only be called with match over same text");
+				return new SimpleMatch(Text, Math.Min(Start, other.Start), Math.Max(End, other.End));
+			}
+
+			public int Start { get; }
+			public int End { get; }
+			public int Length { get => End - Start; }
+			private string Text { get; }
+			public string Value { get => Text.Substring(Start, Length); }
+			// We're not interested in 0-length matches
+			public bool Success { get => Length > 0; }
+		}
+
+		private static List<SimpleMatch> MergeMatches(List<SimpleMatch> matches)
+		{
+			matches.Sort((a, b) => a.Start.CompareTo(b.Start));
+			List<SimpleMatch> result = new List<SimpleMatch>();
+			foreach (SimpleMatch m in matches)
+			{
+				if (result.Count == 0 || result[result.Count - 1].End < m.Start)
+					result.Add(m);
+				else
+					result[result.Count - 1] = result[result.Count - 1].Extend(m);
+			}
+			return result;
+		}
+
+		static List<SimpleMatch> MatchRegexList(List<Regex> regexes, string text)
+		{
+			var result = new List<SimpleMatch>();
+			foreach (Regex regex in regexes)
+			{
+				var matches = regex.Matches(text);
+				if (matches.Count == 0)
+					return new List<SimpleMatch>();
+				result.AddRange(matches.Cast<Match>().Select(x => new SimpleMatch(text, x)));
+			}
+			return MergeMatches(result);
+		}
+
 		// Given a list of (lineOffset, line) and a pattern, return UI-suitable strings with associated (offset, length) pairs.
-		static IEnumerable<(string, (int, int))> FindMatchingLocations(List<(int, string)> lines, Regex regex)
+		static IEnumerable<(string, (int, int))> FindMatchingLocations(List<(int, string)> lines, List<Regex> regexes)
 		{
 			int count = 0;
 			int linum = 0;
-			while (count < 100 && linum < lines.Count)
+			// We cap at 1000 just in case caller doesn't limit us
+			while (count < 1000 && linum < lines.Count)
 			{
 				var (lineOfs, line) = lines[linum];
 				++linum;
 
 				// Default case: empty pattern. Special case this one, we don't need to split every character.
-				if (regex.IsMatch(""))
+				if (regexes.Count == 0 || regexes[0].IsMatch(""))
 				{
 					++count;
 					yield return (line, (lineOfs, 0));
 					continue;
 				}
 
-				var matches = regex.Matches(line);
+				var matches = MatchRegexList(regexes, line);
 				if (matches.Count == 0)
+				{
 					continue;
+				}
 				count += matches.Count;
 				// if multiple matches in a line, break them out
 				// if a single match, keep as is
@@ -585,11 +655,11 @@ namespace Barrkel.ScratchPad
 				if (matches.Count > 1)
 				{
 					prefix = "   ";
-					yield return (line, (lineOfs + matches[0].Index, matches[0].Length));
+					yield return (line, (lineOfs + matches[0].Start, matches[0].Length));
 				}
-				foreach (Match match in matches)
+				foreach (SimpleMatch match in matches)
 				{
-					yield return (prefix + Contextualize(line, match), (lineOfs + match.Index, match.Length));
+					yield return (prefix + Contextualize(line, match), (lineOfs + match.Start, match.Length));
 				}
 			}
 		}
@@ -618,12 +688,43 @@ namespace Barrkel.ScratchPad
 			}
 		}
 
+		private bool AnyCaps(string value)
+		{
+			foreach (char ch in value)
+				if (char.IsUpper(ch))
+					return true;
+			return false;
+		}
+
+		public List<Regex> ParseRegexList(string pattern, RegexOptions options)
+		{
+			if (!AnyCaps(pattern))
+				options |= RegexOptions.IgnoreCase;
+
+			Regex parsePart(string part)
+			{
+				if (part.StartsWith("*"))
+					part = "\\" + part;
+				try
+				{
+					return new Regex(part, options);
+				}
+				catch (ArgumentException)
+				{
+					return new Regex(Regex.Escape(part), options);
+				}
+			}
+
+			return pattern.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
+				.Select(x => parsePart(x))
+				.ToList();
+		}
+
 		[Action("occur")]
 		public void Occur(IScratchBookView view, string[] _)
 		{
 			var lines = GetNonEmptyLines(view.CurrentText).ToList();
-			if (view.RunSearch(pattern => FindMatchingLocations(lines, 
-				new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline)), 
+			if (view.RunSearch(pattern => FindMatchingLocations(lines, ParseRegexList(pattern, RegexOptions.Singleline)), 
 				out var pair))
 			{
 				var (pos, len) = pair;
@@ -685,10 +786,11 @@ namespace Barrkel.ScratchPad
 		private IEnumerable<(string, (int, int, int))> TrySearch(ScratchBook book, string pattern, 
 			SearchOptions options = SearchOptions.None)
 		{
-			Regex re;
+			List<Regex> re, fullRe;
 			try
 			{
-				re = new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
+				re = ParseRegexList(pattern, RegexOptions.Singleline);
+				fullRe = ParseRegexList(pattern, RegexOptions.Multiline);
 			}
 			catch (ArgumentException)
 			{
@@ -697,8 +799,8 @@ namespace Barrkel.ScratchPad
 
 			for (int i = 0; i < Book.Pages.Count; ++i)
 			{
-				var page = Book.Pages[i];
-				if (!re.Match(page.Text).Success)
+				var page = book.Pages[i];
+				if (fullRe.Count > 0 && !fullRe[0].Match(page.Text).Success)
 					continue;
 
 				if (pattern.Length == 0)
