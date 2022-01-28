@@ -57,7 +57,11 @@ namespace Barrkel.GtkScratchPad
 				case Gdk.Key.Escape:
 					ModalResult = ModalResult.Cancel;
 					return false;
-					
+
+				case Gdk.Key.Return:
+					ModalResult = ModalResult.OK;
+					return false;
+
 				default:
 					return base.OnKeyPressEvent(evnt);
 			}

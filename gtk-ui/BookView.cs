@@ -116,8 +116,9 @@ namespace Barrkel.GtkScratchPad
 			// this comes out with S-Tab
 			result.Add(Gdk.Key.ISO_Left_Tab, "Tab");
 
-			result.Add(Gdk.Key.L1, "F11");
-			result.Add(Gdk.Key.L2, "F12");
+			// Clobber synonym. L1 and F11 have same value.
+			result[Gdk.Key.L1] = "F11";
+			result[Gdk.Key.L2] = "F12";
 
 			return result;
 		}
