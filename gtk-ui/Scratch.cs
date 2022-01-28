@@ -797,7 +797,8 @@ namespace Barrkel.ScratchPad
 				yield break;
 			}
 
-			for (int i = 0; i < Book.Pages.Count; ++i)
+			// Keep most recent pagesfirst
+			for (int i = book.Pages.Count - 1; i >= 0; --i)
 			{
 				var page = book.Pages[i];
 				if (fullRe.Count > 0 && !fullRe[0].Match(page.Text).Success)
@@ -1214,7 +1215,7 @@ namespace Barrkel.ScratchPad
 		{
 			string[] parts = text.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
 			
-			for (int i = 0; i < Pages.Count; ++i)
+			for (int i = Pages.Count - 1; i >= 0; --i)
 			{
 				var page = Pages[i];
 				
@@ -1225,7 +1226,7 @@ namespace Barrkel.ScratchPad
 
 		public IEnumerable<(string, int)> SearchText(Regex re)
 		{
-			for (int i = 0; i < Pages.Count; ++i)
+			for (int i = Pages.Count - 1; i >= 0; --i)
 			{
 				var page = Pages[i];
 				if (re.Match(page.Text).Success)
@@ -1235,7 +1236,7 @@ namespace Barrkel.ScratchPad
 
 		public IEnumerable<(string,int)> SearchTitles(Regex re)
 		{
-			for (int i = 0; i < Pages.Count; ++i)
+			for (int i = Pages.Count - 1; i >= 0; --i)
 			{
 				var page = Pages[i];
 				if (re.Match(page.Title).Success)
