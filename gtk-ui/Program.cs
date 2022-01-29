@@ -2,6 +2,7 @@ using System;
 using Gtk;
 using Barrkel.ScratchPad;
 using System.Collections.Generic;
+using System.Linq;
 using System.IO;
 
 namespace Barrkel.GtkScratchPad
@@ -21,6 +22,22 @@ namespace Barrkel.GtkScratchPad
 				Console.ReadLine();
 				return 1;
 			}
+		}
+
+		private static void NormalizeLineEndings(DirectoryInfo root)
+		{
+			root.GetFiles();
+			foreach (string baseName in root.GetFiles("*.txt")
+				.Union(root.GetFiles("*.log"))
+				.Select(f => Path.ChangeExtension(f.FullName, null))
+				.Distinct())
+			{
+				Console.WriteLine("Normalizing {0}", baseName);
+				ScratchPage.NormalizeLineEndings(baseName);
+			}
+			foreach (DirectoryInfo child in root.GetDirectories())
+				if (child.Name != "." && child.Name != "..")
+					NormalizeLineEndings(child);
 		}
 
 		public static int AppMain(string[] argArray)
@@ -43,6 +60,11 @@ namespace Barrkel.GtkScratchPad
 			{
 				Console.WriteLine("Expected argument: storage directory");
 				return 1;
+			}
+
+			if (options.NormalizeFiles)
+			{
+				NormalizeLineEndings(new DirectoryInfo(args[0]));
 			}
 
 			ScratchRoot root = new ScratchRoot(options, args[0]);

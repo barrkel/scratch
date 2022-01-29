@@ -14,6 +14,7 @@ namespace Barrkel.ScratchPad
 		public Options(List<string> args)
 		{
 			DebugKeys = ParseFlag(args, "debug-keys");
+			NormalizeFiles = ParseFlag(args, "normalize");
 		}
 
 		static bool MatchFlag(string arg, string name)
@@ -27,6 +28,7 @@ namespace Barrkel.ScratchPad
 		}
 
 		public bool DebugKeys;
+		public bool NormalizeFiles;
 	}
 
 	public delegate IEnumerable<(string, T)> SearchFunc<T>(string text);
@@ -1286,6 +1288,62 @@ namespace Barrkel.ScratchPad
 			LogFile = new FileInfo(Path.ChangeExtension(_baseName, ".log"));
 		}
 
+		public static void NormalizeLineEndings(string baseName)
+		{
+			FileInfo textFile = new FileInfo(Path.ChangeExtension(baseName, ".txt"));
+			FileInfo logFile = new FileInfo(Path.ChangeExtension(baseName, ".log"));
+
+			string srcTextFinal = null;
+			if (textFile.Exists)
+				srcTextFinal = File.ReadAllText(textFile.FullName);
+			var srcUpdates = new List<ScratchUpdate>();
+			if (logFile.Exists)
+			{
+				using (var reader = new LineReader(logFile.FullName))
+					while (true)
+						try
+						{
+							srcUpdates.Add(ScratchUpdate.Load(reader.ReadLine));
+						}
+						catch (EndOfStreamException)
+						{
+							break;
+						}
+			}
+
+			// replay source and transcribe to destination
+			string srcText = "";
+			string dstText = "";
+			var dstUpdates = new List<ScratchUpdate>();
+
+			bool diff = false;
+			foreach (ScratchUpdate srcUp in srcUpdates)
+			{
+				srcText = srcUp.Apply(srcText, out _, out _);
+				string newDest = srcText.Replace("\r\n", "\n");
+				ScratchUpdate dstUp = ScratchUpdate.CalcUpdate(dstText, newDest, srcUp.Stamp);
+				dstText = newDest;
+				dstUpdates.Add(dstUp);
+				diff |= srcText != dstText;
+			}
+			if (srcTextFinal != null && srcTextFinal != srcText)
+			{
+				string newDest = srcTextFinal.Replace("\r\n", "\n");
+				ScratchUpdate dstUp = ScratchUpdate.CalcUpdate(dstText, newDest, textFile.LastWriteTimeUtc);
+				dstText = newDest;
+				dstUpdates.Add(dstUp);
+			}
+
+			// rewrite data only if necessary
+			if (!diff)
+				return;
+
+			using (var writer = new LineWriter(logFile.FullName, FileMode.Create))
+				foreach (var up in dstUpdates)
+					up.Save(writer.WriteLine);
+			File.WriteAllText(textFile.FullName, dstText);
+		}
+
 		public string Title => _titleCache.Get(_shortName, ChangeStamp, () => GetReadOnlyPage().Title);
 
 		internal PageViewState GetViewState(IScratchBookView view)
@@ -1814,12 +1872,17 @@ namespace Barrkel.ScratchPad
 						string.Format("Unknown update kind '{0}'", kind));
 			}
 		}
-		
+
 		public static ScratchUpdate CalcUpdate(string oldText, string newText)
 		{
 			return new ScratchBatch(CalcUpdates(oldText, newText));
 		}
-		
+
+		public static ScratchUpdate CalcUpdate(string oldText, string newText, DateTime stamp)
+		{
+			return new ScratchBatch(CalcUpdates(oldText, newText), stamp);
+		}
+
 		// Simplistic text diff algorithm creating insertions and deletions.
 		// Doesn't try very hard to be optimal.
 		static IEnumerable<ScratchUpdate> CalcUpdates(string oldText, string newText)
@@ -1919,7 +1982,7 @@ namespace Barrkel.ScratchPad
 										newText.Substring(changeNew, changeLen));
 								}
 								int deleteLen = found - oldIndex;
-								yield return new ScratchDeletion(resIndex,
+								yield return new ScratchDeletion(resIndex, 
 									oldText.Substring(oldIndex, deleteLen));
 								oldIndex += deleteLen;
 								goto loop_top;
@@ -1955,10 +2018,15 @@ namespace Barrkel.ScratchPad
 		{
 			List<ScratchUpdate> _updates = new List<ScratchUpdate>();
 			DateTime _stamp;
-			
+
 			public ScratchBatch(IEnumerable<ScratchUpdate> updates)
+				: this(updates, DateTime.UtcNow)
 			{
-				_stamp = DateTime.UtcNow;
+			}
+
+			public ScratchBatch(IEnumerable<ScratchUpdate> updates, DateTime stamp)
+			{
+				_stamp = stamp;
 				_updates.AddRange(updates);
 			}
 			
