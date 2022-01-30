@@ -64,6 +64,8 @@ namespace Barrkel.ScratchPad
 		// View should call InvokeAction with actionName every millis milliseconds
 		void AddRepeatingTimer(int millis, string actionName);
 
+		void AddNewPage();
+
 		// Show a search dialog with text box, list box and ok/cancel buttons.
 		// List box is populated from result of searchFunc applied to contents of text box.
 		// Returns true if OK clicked and item in list box selected, with associated T in result.
@@ -91,10 +93,7 @@ namespace Barrkel.ScratchPad
 
 		public ScratchRoot Root { get; }
 
-		public Options Options
-		{
-			get => Root.Options;
-		}
+		public Options Options => Root.Options;
 
 		public ScratchBookController GetControllerFor(ScratchBook book)
 		{
@@ -138,6 +137,7 @@ namespace Barrkel.ScratchPad
 			_bindings.Add("F12", "navigate-title");
 			_bindings.Add("F11", "navigate-contents");
 			_bindings.Add("C-t", "navigate-todo");
+			_bindings.Add("C-n", "add-new-page");
 		}
 
 		public bool TryGetBinding(string key, out string actionName)
@@ -592,11 +592,11 @@ namespace Barrkel.ScratchPad
 
 			public int Start { get; }
 			public int End { get; }
-			public int Length { get => End - Start; }
+			public int Length => End - Start;
 			private string Text { get; }
-			public string Value { get => Text.Substring(Start, Length); }
+			public string Value => Text.Substring(Start, Length);
 			// We're not interested in 0-length matches
-			public bool Success { get => Length > 0; }
+			public bool Success => Length > 0;
 		}
 
 		private static List<SimpleMatch> MergeMatches(List<SimpleMatch> matches)
@@ -761,6 +761,12 @@ namespace Barrkel.ScratchPad
 		public void NavigateTodo(IScratchBookView view, string[] _)
 		{
 			NavigateSigil(view, "=>");
+		}
+
+		[Action("add-new-page")]
+		public void AddNewPage(IScratchBookView view, string[] _)
+		{
+			view.AddNewPage();
 		}
 
 		private void NavigateSigil(IScratchBookView view, string sigil)
@@ -1116,7 +1122,6 @@ namespace Barrkel.ScratchPad
 		{
 			Pages = new ReadOnlyCollection<ScratchPage>(_pages);
 			_rootDirectory = rootDirectory;
-			UnixLineEndings = File.Exists(Path.Combine(rootDirectory, ".unix"));
 			var root = new DirectoryInfo(rootDirectory);
 			TitleCache = new LineCache(Path.Combine(_rootDirectory, "title_cache.text"));
 			_pages.AddRange(root.GetFiles("*.txt")
@@ -1128,8 +1133,6 @@ namespace Barrkel.ScratchPad
 		}
 
 		internal LineCache TitleCache { get; }
-
-		public bool UnixLineEndings { get; }
 
 		static bool DoesBaseNameExist(string baseName)
 		{
@@ -1288,6 +1291,8 @@ namespace Barrkel.ScratchPad
 			LogFile = new FileInfo(Path.ChangeExtension(_baseName, ".log"));
 		}
 
+		public bool IsNew => _realImpl != null && _realImpl.IsEmpty;
+
 		public static void NormalizeLineEndings(string baseName)
 		{
 			FileInfo textFile = new FileInfo(Path.ChangeExtension(baseName, ".txt"));
@@ -1345,6 +1350,8 @@ namespace Barrkel.ScratchPad
 		}
 
 		public string Title => _titleCache.Get(_shortName, ChangeStamp, () => GetReadOnlyPage().Title);
+
+		public bool IsEmpty =>_realImpl == null || _realImpl.IsEmpty;
 
 		internal PageViewState GetViewState(IScratchBookView view)
 		{
@@ -1457,7 +1464,11 @@ namespace Barrkel.ScratchPad
 				return;
 			RealScratchPage realImpl = GetRealPage();
 			using (var w = new LineWriter(LogFile.FullName, FileMode.Append))
-				realImpl.SaveLatest(w.WriteLine);
+				if (!realImpl.SaveLatest(w.WriteLine))
+				{
+					Console.WriteLine("Dodged a write!");
+					return;
+				}
 			File.WriteAllText(TextFile.FullName, _realImpl.Text);
 			_logStamp = LogFile.LastWriteTimeUtc;
 			_textStamp = TextFile.LastWriteTimeUtc;
@@ -1475,7 +1486,7 @@ namespace Barrkel.ScratchPad
 	}
 
 	// Lightweight read-only current-version-only view of a page.
-	// Should not be instantiated if we only have the log file, but it'll cope.
+	// Should not be instantiated if we only have the log file, but it'll cope (it'll replay log).
 	public class LiteScratchPage : IReadOnlyPage
 	{
 		ScratchPage _page;
@@ -1545,6 +1556,8 @@ namespace Barrkel.ScratchPad
 		{
 		}
 
+		public bool IsEmpty => _updates.Count == 0 && _text == "";
+
 		public string Title
 		{
 			get
@@ -1575,18 +1588,20 @@ namespace Barrkel.ScratchPad
 			_lastSave = _updates.Count;
 		}
 
-		public void SaveLatest(Action<string> sink)
+		public bool SaveLatest(Action<string> sink)
 		{
 			for (int i = _lastSave; i < _updates.Count; ++i)
 				_updates[i].Save(sink);
 			_lastSave = _updates.Count;
+			return _updates.Count > 0;
 		}
 
-		public void SaveAll(Action<string> sink)
+		public bool SaveAll(Action<string> sink)
 		{
 			for (int i = 0; i < _updates.Count; ++i)
 				_updates[i].Save(sink);
 			_lastSave = _updates.Count;
+			return _updates.Count > 0;
 		}
 
 		public ScratchIterator GetIterator()
@@ -1619,25 +1634,40 @@ namespace Barrkel.ScratchPad
 
 	class LineWriter : IDisposable
 	{
+		Func<FileStream> _fileCtor;
 		TextWriter _writer;
 		FileStream _file;
 		
 		public LineWriter(string path, FileMode mode)
 		{
-			_file = new FileStream(path, mode);
-			_writer = new StreamWriter(_file);
+			// Lazily construct file so we only write non-empty files.
+			_fileCtor = () => new FileStream(path, mode);
 		}
 		
 		public void WriteLine(string line)
 		{
-			_writer.WriteLine(StringUtil.Escape(line));
+			if (_writer != null || line != "")
+				GetWriter().WriteLine(StringUtil.Escape(line));
 		}
-		
+
+		private TextWriter GetWriter()
+		{
+			if (_writer == null)
+			{
+				_file = _fileCtor();
+				_writer = new StreamWriter(_file);
+			}
+			return _writer;
+		}
+
 		public void Dispose()
 		{
-			_writer.Flush();
-			_writer.Dispose();
-			_file.Dispose();
+			if (_writer != null)
+			{
+				_writer.Flush();
+				_writer.Dispose();
+				_file.Dispose();
+			}
 		}
 	}
 	
@@ -1798,13 +1828,9 @@ namespace Barrkel.ScratchPad
 			return true;
 		}
 		
-		public int UpdatedFrom { get => _updatedFrom; }
-		public int UpdatedTo { get => _updatedTo; }
-
-		public int Count
-		{
-			get { return _updates.Count; }
-		}
+		public int UpdatedFrom => _updatedFrom;
+		public int UpdatedTo => _updatedTo;
+		public int Count => _updates.Count;
 		
 		public int Position
 		{
