@@ -18,7 +18,9 @@ namespace ScratchLog
 				Console.WriteLine("Output date-stamped log of modifications in order with titles at time of modification");
 				return 1;
 			}
-			ScratchRoot root = new ScratchRoot(args[0]);
+			List<string> argList = new List<string>(args);
+			Options options = new Options(argList);
+			ScratchRoot root = new ScratchRoot(options, argList[0]);
 			
 			var updates = new List<Update>();
 			
@@ -33,6 +35,7 @@ namespace ScratchLog
 					} while (iter.MovePrevious());
 				}
 			}
+			Console.WriteLine("Gathered {0} updates", updates.Count);
 			
 			Update previous = null;
 			Update finish = null;
