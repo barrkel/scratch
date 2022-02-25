@@ -26,7 +26,7 @@ namespace Barrkel.GtkScratchPad
 
 		private static void NormalizeLineEndings(DirectoryInfo root)
 		{
-			root.GetFiles();
+			Console.WriteLine("Processing notes in {0}", root.FullName);
 			foreach (string baseName in root.GetFiles("*.txt")
 				.Union(root.GetFiles("*.log"))
 				.Select(f => Path.ChangeExtension(f.FullName, null))

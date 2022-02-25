@@ -31,6 +31,91 @@ namespace Barrkel.ScratchPad
 		public bool NormalizeFiles;
 	}
 
+	public enum ScratchType
+	{
+		Null,
+		String, // string
+		Int32, // integer
+		Action
+	}
+
+	public delegate ScratchValue ScratchAction(ScratchBookController controller, IScratchBookView view, IList<ScratchValue> args);
+
+	public class ScratchValue
+	{
+		public static readonly ScratchValue Null = new ScratchValue(null, ScratchType.Null);
+		public static readonly IList<ScratchValue> EmptyList = new ScratchValue[0];
+
+		private Object _value;
+
+		private ScratchValue(object value, ScratchType type)
+		{
+			_value = value;
+			Type = type;
+		}
+
+		public ScratchValue(string value)
+		{
+			_value = value;
+			Type = ScratchType.String;
+		}
+
+		public ScratchValue(int value)
+		{
+			_value = value;
+			Type = ScratchType.Int32;
+		}
+
+		public ScratchValue(ScratchAction action)
+		{
+			_value = action;
+			Type = ScratchType.Action;
+		}
+
+		public static ScratchValue FromObject(object value)
+		{
+			switch (value)
+			{
+				case null:
+					return Null;
+
+				case ScratchValue scratchValue:
+					return scratchValue;
+
+				case string stringValue:
+					return new ScratchValue(stringValue);
+
+				case int intValue:
+					return new ScratchValue(intValue);
+
+				case ScratchAction action:
+					return new ScratchValue(action);
+
+				default:
+					throw new ArgumentException("Invalid type: " + value);
+			}
+		}
+
+		public ScratchType Type { get; private set; }
+		public String StringValue => (string)_value;
+		public int Int32Value => (int)_value;
+
+		public ScratchValue Invoke(ScratchBookController controller, IScratchBookView view, IList<ScratchValue> args)
+		{
+			return ((ScratchAction)_value)(controller, view, args);
+		}
+	}
+
+	public class ScratchScope
+	{
+		Dictionary<string, ScratchValue> _bindings;
+
+		public void Load(TextReader reader)
+		{
+
+		}
+	}
+
 	public delegate IEnumerable<(string, T)> SearchFunc<T>(string text);
 
 	public interface IScratchBookView
@@ -86,8 +171,7 @@ namespace Barrkel.ScratchPad
 		// Keyboard bindings to actions. Keyboard uses Emacs-style names; C-M-S-X is Ctrl-Alt-Shift-X.
 		Dictionary<string, string> _bindings = new Dictionary<string, string>();
 
-		Dictionary<string, Action<ScratchBookController,IScratchBookView, string[]>> _actions =
-			new Dictionary<string, Action<ScratchBookController,IScratchBookView, string[]>>();
+		Dictionary<string, ScratchAction> _actions = new Dictionary<string, ScratchAction>();
 
 		Dictionary<ScratchBook, ScratchBookController> _controllerMap = new Dictionary<ScratchBook, ScratchBookController>();
 
@@ -118,7 +202,7 @@ namespace Barrkel.ScratchPad
 				foreach (ActionAttribute attr in Attribute.GetCustomAttributes(member, typeof(ActionAttribute)))
 				{
 					_actions.Add(attr.Name, (controller, view, args) =>
-						method.Invoke(controller, new object[] { view, args }));
+						(ScratchValue) method.Invoke(controller, new object[] { view, args }));
 				}
 			}
 
@@ -145,7 +229,7 @@ namespace Barrkel.ScratchPad
 			return _bindings.TryGetValue(key, out actionName);
 		}
 
-		public bool TryGetAction(string actionName, out Action<ScratchBookController,IScratchBookView,string[]> action)
+		public bool TryGetAction(string actionName, out ScratchAction action)
 		{
 			return _actions.TryGetValue(actionName, out action);
 		}
@@ -195,9 +279,10 @@ namespace Barrkel.ScratchPad
 		}
 
 		[Action("check-for-save")]
-		public void CheckForSave(IScratchBookView view, string[] _)
+		internal ScratchValue CheckForSave(IScratchBookView view, IList<ScratchValue> args)
 		{
 			// ...
+			return ScratchValue.Null;
 		}
 
 		public bool InformKeyStroke(IScratchBookView view, string keyName, bool ctrl, bool alt, bool shift)
@@ -220,7 +305,7 @@ namespace Barrkel.ScratchPad
 				if (RootController.TryGetAction(actionName, out var action))
 				{
 					// Console.WriteLine("Invoking {0}", actionName);
-					action(this, view, Array.Empty<string>());
+					action(this, view, ScratchValue.EmptyList);
 					return true;
 				}
 			}
@@ -228,7 +313,7 @@ namespace Barrkel.ScratchPad
 			return false;
 		}
 
-		public void InvokeAction(IScratchBookView view, string actionName, string[] args)
+		public void InvokeAction(IScratchBookView view, string actionName, IList<ScratchValue> args)
 		{
 			if (RootController.TryGetAction(actionName, out var action))
 			{
@@ -236,7 +321,7 @@ namespace Barrkel.ScratchPad
 			}
 		}
 
-		public void InformEvent(IScratchBookView view, string eventName, string[] args)
+		public void InformEvent(IScratchBookView view, string eventName, IList<ScratchValue> args)
 		{
 			if (RootController.TryGetAction("on-" + eventName, out var action))
 			{
@@ -363,13 +448,13 @@ namespace Barrkel.ScratchPad
 		}
 
 		[Action("insert-date")]
-		public void DoInsertDate(IScratchBookView view, string[] _)
+		public void DoInsertDate(IScratchBookView view, IList<ScratchValue> args)
 		{
 			view.InsertText(DateTime.Today.ToString("yyyy-MM-dd"));
 		}
 
 		[Action("insert-datetime")]
-		public void DoInsertDateTime(IScratchBookView view, string[] _)
+		public void DoInsertDateTime(IScratchBookView view, IList<ScratchValue> args)
 		{
 			view.InsertText(DateTime.Now.ToString("yyyy-MM-dd HH:mm"));
 		}
@@ -381,7 +466,7 @@ namespace Barrkel.ScratchPad
 		}
 
 		[Action("indent-block")]
-		public void DoIndentBlock(IScratchBookView view, string[] _)
+		public void DoIndentBlock(IScratchBookView view, IList<ScratchValue> args)
 		{
 			string text = view.SelectedText;
 			if (string.IsNullOrEmpty(text))
@@ -393,7 +478,7 @@ namespace Barrkel.ScratchPad
 		}
 
 		[Action("unindent-block")]
-		public void DoUnindentBlock(IScratchBookView view, string[] _)
+		public void DoUnindentBlock(IScratchBookView view, IList<ScratchValue> args)
 		{
 			// remove 2 spaces or a tab or one space from every line
 			string text = view.SelectedText;
@@ -420,7 +505,7 @@ namespace Barrkel.ScratchPad
 		}
 
 		[Action("smart-paste")]
-		public void DoSmartPaste(IScratchBookView view, string[] _)
+		public void DoSmartPaste(IScratchBookView view, IList<ScratchValue> args)
 		{
 			view.SelectedText = "";
 			string textToPaste = view.Clipboard;
@@ -503,7 +588,7 @@ namespace Barrkel.ScratchPad
 		}
 
 		[Action("autoindent-return")]
-		public void DoAutoindentReturn(IScratchBookView view, string[] _)
+		public void DoAutoindentReturn(IScratchBookView view, IList<ScratchValue> args)
 		{
 			string text = view.CurrentText;
 			int pos = view.CurrentPosition;
@@ -723,7 +808,7 @@ namespace Barrkel.ScratchPad
 		}
 
 		[Action("occur")]
-		public void Occur(IScratchBookView view, string[] _)
+		public void Occur(IScratchBookView view, IList<ScratchValue> args)
 		{
 			var lines = GetNonEmptyLines(view.CurrentText).ToList();
 			if (view.RunSearch(pattern => FindMatchingLocations(lines, ParseRegexList(pattern, RegexOptions.Singleline)), 
@@ -736,7 +821,7 @@ namespace Barrkel.ScratchPad
 		}
 
 		[Action("navigate-title")]
-		public void NavigateTitle(IScratchBookView view, string[] _)
+		public void NavigateTitle(IScratchBookView view, IList<ScratchValue> args)
 		{
 			view.EnsureSaved();
 			if (view.RunSearch(text => Book.SearchTitles(text).Take(100), out int found))
@@ -744,7 +829,7 @@ namespace Barrkel.ScratchPad
 		}
 
 		[Action("navigate-contents")]
-		public void NavigateContents(IScratchBookView view, string[] _)
+		public void NavigateContents(IScratchBookView view, IList<ScratchValue> args)
 		{
 			view.EnsureSaved();
 			if (view.RunSearch(text => TrySearch(Book, text).Take(50), out var triple))
@@ -758,13 +843,13 @@ namespace Barrkel.ScratchPad
 		}
 
 		[Action("navigate-todo")]
-		public void NavigateTodo(IScratchBookView view, string[] _)
+		public void NavigateTodo(IScratchBookView view, IList<ScratchValue> args)
 		{
 			NavigateSigil(view, "=>");
 		}
 
 		[Action("add-new-page")]
-		public void AddNewPage(IScratchBookView view, string[] _)
+		public void AddNewPage(IScratchBookView view, IList<ScratchValue> args)
 		{
 			view.AddNewPage();
 		}
@@ -841,7 +926,7 @@ namespace Barrkel.ScratchPad
 		}
 
 		[Action("goto-sol")]
-		public void GotoSol(IScratchBookView view, string[] _)
+		public void GotoSol(IScratchBookView view, IList<ScratchValue> args)
 		{
 			// NOTE: does not extend selection
 			string text = view.CurrentText;
@@ -851,7 +936,7 @@ namespace Barrkel.ScratchPad
 		}
 
 		[Action("goto-eol")]
-		public void GotoEol(IScratchBookView view, string[] _)
+		public void GotoEol(IScratchBookView view, IList<ScratchValue> args)
 		{
 			string text = view.CurrentText;
 			int pos = view.CurrentPosition;
@@ -921,7 +1006,7 @@ namespace Barrkel.ScratchPad
 		}
 
 		[Action("complete")]
-		public void CompleteAtPoint(IScratchBookView view, string[] _)
+		public void CompleteAtPoint(IScratchBookView view, IList<ScratchValue> args)
 		{
 			// Emacs-style complete-at-point
 			// foo| -> find symbols starting with foo and complete first found (e.g. 'bar')
@@ -973,7 +1058,7 @@ namespace Barrkel.ScratchPad
 		}
 
 		[Action("exit-page")]
-		public void ExitPage(IScratchBookView view, string[] _)
+		public void ExitPage(IScratchBookView view, IList<ScratchValue> args)
 		{
 			ScratchPage page = GetPage(view.CurrentPageIndex);
 			if (page == null)
@@ -984,7 +1069,7 @@ namespace Barrkel.ScratchPad
 		}
 
 		[Action("enter-page")]
-		public void EnterPage(IScratchBookView view, string[] _)
+		public void EnterPage(IScratchBookView view, IList<ScratchValue> args)
 		{
 			ScratchPage page = GetPage(view.CurrentPageIndex);
 			if (page == null)
@@ -1078,7 +1163,7 @@ namespace Barrkel.ScratchPad
 				foreach (var (name, (timestamp, line)) in _cache)
 				{
 					w.WriteLine(StringUtil.Escape(name));
-					w.WriteLine(timestamp.ToString());
+					w.WriteLine(timestamp.ToString("o"));
 					w.WriteLine(StringUtil.Escape(line));
 				}
 			}
