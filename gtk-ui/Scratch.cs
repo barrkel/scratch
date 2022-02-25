@@ -96,7 +96,7 @@ namespace Barrkel.ScratchPad
 			}
 		}
 
-		public ScratchType Type { get; private set; }
+		public ScratchType Type { get; }
 		public String StringValue => (string)_value;
 		public int Int32Value => (int)_value;
 
@@ -108,11 +108,38 @@ namespace Barrkel.ScratchPad
 
 	public class ScratchScope
 	{
-		Dictionary<string, ScratchValue> _bindings;
+		Dictionary<string, ScratchValue> _bindings = new Dictionary<string, ScratchValue>();
+
+		public ScratchScope()
+		{
+		}
+
+		public ScratchScope(ScratchScope parent)
+		{
+			Parent = parent;
+		}
 
 		public void Load(TextReader reader)
 		{
+			// TODO
+		}
 
+		public ScratchScope Parent { get; }
+
+		public bool TryLookup(string name, out ScratchValue result)
+		{
+			for (ScratchScope scope = this; scope != null; scope = scope.Parent)
+				if (scope._bindings.TryGetValue(name, out result))
+					return true;
+			result = null;
+			return false;
+		}
+
+		public ScratchValue Lookup(string name)
+		{
+			if (TryLookup(name, out ScratchValue result))
+				return result;
+			throw new ArgumentException("name not found in scope: " + name);
 		}
 	}
 
@@ -168,16 +195,17 @@ namespace Barrkel.ScratchPad
 	// Much of it is stringly typed for a dynamically bound future.
 	public class ScratchController
 	{
+		ScratchScope rootScope = new ScratchScope();
 		// Keyboard bindings to actions. Keyboard uses Emacs-style names; C-M-S-X is Ctrl-Alt-Shift-X.
 		Dictionary<string, string> _bindings = new Dictionary<string, string>();
-
 		Dictionary<string, ScratchAction> _actions = new Dictionary<string, ScratchAction>();
-
 		Dictionary<ScratchBook, ScratchBookController> _controllerMap = new Dictionary<ScratchBook, ScratchBookController>();
 
 		public ScratchRoot Root { get; }
 
 		public Options Options => Root.Options;
+
+		public ScratchScope RootScope => rootScope;
 
 		public ScratchBookController GetControllerFor(ScratchBook book)
 		{
@@ -266,11 +294,13 @@ namespace Barrkel.ScratchPad
 
 		public ScratchBook Book { get; }
 		public ScratchController RootController { get; }
+		public ScratchScope Scope { get; }
 
 		public ScratchBookController(ScratchController rootController, ScratchBook book)
 		{
 			Book = book;
 			RootController = rootController;
+			Scope = new ScratchScope(rootController.RootScope);
 		}
 
 		public void ConnectView(IScratchBookView view)
@@ -2208,8 +2238,8 @@ namespace Barrkel.ScratchPad
 				Value = source();
 			}
 			
-			public int Offset { get; private set; }
-			public string Value { get; private set; }
+			public int Offset { get; }
+			public string Value { get; }
 			
 			public override string Apply(string oldText, out int from, out int to)
 			{
@@ -2249,8 +2279,8 @@ namespace Barrkel.ScratchPad
 				Value = source();
 			}
 
-			public int Offset { get; private set; }
-			public string Value { get; private set; }
+			public int Offset { get; }
+			public string Value { get; }
 			
 			public override string Apply(string oldText, out int from, out int to)
 			{
