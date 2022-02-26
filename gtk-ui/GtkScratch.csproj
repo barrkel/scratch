@@ -91,6 +91,10 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="BookView.cs" />
+    <Compile Include="ScratchConf.cs" />
+    <Compile Include="ScratchController.cs" />
+    <Compile Include="ScratchLegacy.cs" />
+    <Compile Include="ScratchScopes.cs" />
     <Compile Include="SearchWindow.cs" />
     <Compile Include="MainWindow.cs" />
     <Compile Include="Program.cs" />
