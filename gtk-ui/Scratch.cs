@@ -106,6 +106,222 @@ namespace Barrkel.ScratchPad
 		}
 	}
 
+	enum ScopeToken
+	{
+		Eof,
+		String,
+		Ident,
+		Int32,
+		Eq,
+		Comma,
+		LParen,
+		RParen,
+		LBrace,
+		RBrace,
+	}
+
+	class ScopeLexer
+	{
+		private int _currPos;
+		private int _lineNum;
+
+		public string Source { get; }
+		public ScopeToken CurrToken { get; private set; }
+		public string StringValue { get; private set; }
+		public int Int32Value { get; private set; }
+
+		public ScopeLexer(string source)
+		{
+			Source = source;
+			NextToken();
+		}
+
+		private void SkipPastEol()
+		{
+			while (_currPos < Source.Length)
+			{
+				char ch = Source[_currPos++];
+				switch (ch)
+				{
+					case '\r':
+						if (_currPos < Source.Length && Source[_currPos] == '\n')
+							++_currPos;
+						++_lineNum;
+						return;
+
+					case '\n':
+						if (_currPos < Source.Length && Source[_currPos] == '\r')
+							++_currPos;
+						++_lineNum;
+						return;
+				}
+			}
+		}
+
+		public void NextToken()
+		{
+			CurrToken = Scan();
+		}
+
+		public void Eat(ScopeToken token)
+		{
+			Expect(token);
+			NextToken();
+		}
+
+		public void Expect(ScopeToken token)
+		{
+			if (CurrToken != token)
+				throw Error("Expected: " + token);
+		}
+
+		public bool IsNot(params ScopeToken[] tokens)
+		{
+			return Array.IndexOf(tokens, CurrToken) < 0;
+		}
+
+		public void ExpectEither(ScopeToken thisToken, ScopeToken thatToken)
+		{
+			if (CurrToken != thisToken && CurrToken != thatToken)
+				throw Error($"Expected: {thisToken} or ${thatToken}");
+		}
+
+		internal ArgumentException Error(string message)
+		{
+			return new ArgumentException($"Line {_lineNum}: {message}");
+		}
+
+		private string ScanString(char type)
+		{
+			int start = _currPos;
+			int startLine = _lineNum;
+			while (_currPos < Source.Length)
+			{
+				char ch = Source[_currPos++];
+
+				if (ch == type)
+					return Source.Substring(start, _currPos - start - 1);
+
+				// we're gonna permit newlines in strings
+				// it'll make things easier for big blobs of text
+				// still need to detect them for the line numbers though
+				if (ch == '\n')
+				{
+					if (_currPos < Source.Length && Source[_currPos] == '\r')
+						++_currPos;
+					++_lineNum;
+				}
+				else if (ch == '\r')
+				{
+					if (_currPos < Source.Length && Source[_currPos] == '\n')
+						++_currPos;
+					++_lineNum;
+				}
+			}
+			throw new ArgumentException($"End of file in string started on line {startLine}");
+		}
+
+		private int ScanInt32()
+		{
+			int start = _currPos - 1;
+			while (_currPos < Source.Length)
+				if (char.IsDigit(Source[_currPos]))
+					++_currPos;
+				else
+					break;
+			return Int32.Parse(Source.Substring(start, _currPos - start - 1));
+		}
+
+		private string ScanIdent()
+		{
+			// identifier syntax includes '-'
+			// [a-z_][A-Z0-9_-]*
+			int start = _currPos - 1;
+			while (_currPos < Source.Length)
+			{
+				char ch = Source[_currPos];
+				if (char.IsLetterOrDigit(ch) || ch == '-' || ch == '_')
+					++_currPos;
+				else
+					break;
+			}
+			return Source.Substring(start, _currPos - start - 1);
+		}
+
+		private ScopeToken Scan()
+		{
+			// this value never actually used
+			// _currPos < Source.Length => it's a char from source
+			// otherwise we return early
+			char ch = '\0';
+
+			// skip whitespace
+			while (_currPos < Source.Length)
+			{
+				ch = Source[_currPos++];
+
+				if (char.IsWhiteSpace(ch))
+					continue;
+
+				switch (ch)
+				{
+					case '/':
+						if (_currPos < Source.Length && Source[_currPos] == '/')
+						{
+							++_currPos;
+							SkipPastEol();
+						}
+						continue;
+
+					case '#':
+						SkipPastEol();
+						continue;
+				}
+
+				break;
+			}
+
+			if (_currPos == Source.Length)
+				return ScopeToken.Eof;
+
+			// determine token type
+			switch (ch)
+			{
+				case '(':
+					return ScopeToken.LParen;
+				case ')':
+					return ScopeToken.RParen;
+				case '{':
+					return ScopeToken.LBrace;
+				case '}':
+					return ScopeToken.RBrace;
+				case ',':
+					return ScopeToken.Comma;
+				case '=':
+					return ScopeToken.Eq;
+
+				case '\'':
+				case '"':
+					StringValue = ScanString(ch);
+					return ScopeToken.String;
+			}
+
+			if (char.IsDigit(ch))
+			{
+				Int32Value = ScanInt32();
+				return ScopeToken.Int32;
+			}
+
+			if (char.IsLetter(ch) || ch == '_' || ch == '-')
+			{
+				StringValue = ScanIdent();
+				return ScopeToken.Ident;
+			}
+
+			throw new ArgumentException($"Unexpected token character: '{ch}' on line {_lineNum}");
+		}
+	}
+
 	public class ScratchScope
 	{
 		Dictionary<string, ScratchValue> _bindings = new Dictionary<string, ScratchValue>();
@@ -119,9 +335,88 @@ namespace Barrkel.ScratchPad
 			Parent = parent;
 		}
 
-		public void Load(TextReader reader)
+		// Additively load bindings from text.
+		public void Load(string source)
 		{
-			// TODO
+			// What grammar?
+			// I want simple key-value for simple settings.
+			// I don't really want top-level interpretation at load time.
+			// I want any language of actions to be very minimal, and use symbolic actions for computation.
+			// I don't really want to write an sexpr reader but that's the level of minimality aimed for.
+
+			// How about this:
+			//   file ::= { setting } .
+			//   setting ::= (<ident> | <string>) '=' value ;
+			//   value ::= <string> | <number> | '{' { call } '}' ;
+			//   call ::= <ident> '(' value { ',' value } ')' ;
+
+			// Part of the idea is to discourage language complexity.
+			// There's no control flow here, for now; not even if, no lazy evaluation.
+			// No way to define function arguments.
+			// We'll use '#' and '//' for comments
+
+			ScopeLexer lexer = new ScopeLexer(source);
+
+			while (lexer.CurrToken != ScopeToken.Eof)
+			{
+				// setting ::= (<ident> | <string>) '=' value ;
+				lexer.ExpectEither(ScopeToken.Ident, ScopeToken.String);
+				string name = lexer.StringValue;
+				lexer.NextToken();
+				_bindings.Add(name, ParseValue(lexer));
+			}
+		}
+
+		private ScratchValue ParseValue(ScopeLexer lexer)
+		{
+			ScratchValue result;
+			// value ::= <string> | <number> | '{' { call } '}' ;
+			switch (lexer.CurrToken)
+			{
+				case ScopeToken.String:
+					result = new ScratchValue(lexer.StringValue);
+					lexer.NextToken();
+					return result;
+
+				case ScopeToken.Int32:
+					result = new ScratchValue(lexer.Int32Value);
+					lexer.NextToken();
+					return result;
+
+				case ScopeToken.LBrace:
+					lexer.NextToken();
+					// call ::= <ident> '(' value { ',' value } ')' ;
+					var calls = new List<(string, List<ScratchValue>)>();
+					while (lexer.CurrToken == ScopeToken.Ident)
+					{
+						string name = lexer.StringValue;
+						lexer.NextToken();
+						lexer.Eat(ScopeToken.LParen);
+						var args = new List<ScratchValue>();
+						while (lexer.IsNot(ScopeToken.Eof, ScopeToken.RParen))
+						{
+							args.Add(ParseValue(lexer));
+							if (lexer.CurrToken == ScopeToken.Comma)
+								lexer.NextToken();
+							else
+								break;
+						}
+						lexer.Eat(ScopeToken.RParen);
+						calls.Add((name, args));
+						// create a lambda with late-bound lookups for all symbols
+						ScratchAction action = (controller, view, _) =>
+						{
+							ScratchValue r = ScratchValue.Null;
+							foreach (var (n, a) in calls)
+								r = controller.Scope.Lookup(n).Invoke(controller, view, a);
+							return r;
+						};
+						return new ScratchValue(action);
+					}
+					break;
+			}
+
+			throw lexer.Error("Expected: string, int or {");
 		}
 
 		public ScratchScope Parent { get; }
