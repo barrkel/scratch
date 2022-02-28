@@ -140,7 +140,6 @@ namespace Barrkel.GtkScratchPad
 			else
 				return base.OnKeyPressEvent(evnt);
 		}
-
 	}
 
 	public class BookView : Frame, IScratchBookView
@@ -160,7 +159,6 @@ namespace Barrkel.GtkScratchPad
 		Label _pageLabel;
 		Label _versionLabel;
 		List<System.Action> _deferred = new List<System.Action>();
-		ScratchBookController _controller;
 
 		public BookView(ScratchBook book, ScratchBookController controller, Settings appSettings, Window appWindow)
 		{
@@ -169,13 +167,14 @@ namespace Barrkel.GtkScratchPad
 			Book = book;
 			InitComponent();
 			_currentPage = book.Pages.Count > 0 ? book.Pages.Count - 1 : 0;
-			_controller = controller;
+			Controller = controller;
 			UpdateViewLabels();
 			UpdateTextBox();
 
-			_controller.ConnectView(this);
+			Controller.ConnectView(this);
 		}
-		
+
+		public ScratchBookController Controller { get; }
 		public Window AppWindow { get; private set; }
 		public Settings AppSettings { get; private set; }
 		
@@ -385,7 +384,7 @@ namespace Barrkel.GtkScratchPad
 
 			if (GdkHelper.TryGetKeyName(evnt.Key, out string keyName))
 			{
-				handled = _controller.InformKeyStroke(this, keyName, ctrl, alt, shift);
+				handled = Controller.InformKeyStroke(this, keyName, ctrl, alt, shift);
 			}
 			else 
 			{
@@ -530,7 +529,7 @@ namespace Barrkel.GtkScratchPad
 		private void ExitPage()
 		{
 			EnsureSaved();
-			_controller.InvokeAction(this, "exit-page", ScratchValue.EmptyList);
+			Controller.InvokeAction(this, "exit-page", ScratchValue.EmptyList);
 		}
 
 		private void EnterPage()
@@ -538,7 +537,7 @@ namespace Barrkel.GtkScratchPad
 			UpdateTextBox();
 			UpdateTitle();
 			UpdateViewLabels();
-			_controller.InvokeAction(this, "enter-page", ScratchValue.EmptyList);
+			Controller.InvokeAction(this, "enter-page", ScratchValue.EmptyList);
 		}
 
 		public void InsertText(string text)
@@ -595,7 +594,7 @@ namespace Barrkel.GtkScratchPad
 		{
 			GLib.Timeout.Add((uint) millis, () => 
 			{
-				_controller.InvokeAction(this, actionName, ScratchValue.EmptyList);
+				Controller.InvokeAction(this, actionName, ScratchValue.EmptyList);
 				return true; 
 			});
 		}

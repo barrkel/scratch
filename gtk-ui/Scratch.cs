@@ -45,9 +45,9 @@ namespace Barrkel.ScratchPad
 			_books = new List<ScratchBook>();
 			Books = new ReadOnlyCollection<ScratchBook>(_books);
 			RootDirectory = rootDirectory;
-			_books.Add(new ScratchBook(rootDirectory));
+			_books.Add(new ScratchBook(this, rootDirectory));
 			foreach (string dir in Directory.GetDirectories(rootDirectory))
-				_books.Add(new ScratchBook(dir));
+				_books.Add(new ScratchBook(this, dir));
 		}
 
 		public Options Options { get; }
@@ -153,19 +153,22 @@ namespace Barrkel.ScratchPad
 		List<ScratchPage> _pages = new List<ScratchPage>();
 		string _rootDirectory;
 
-		public ScratchBook(string rootDirectory)
+		public ScratchBook(ScratchRoot root, string rootDirectory)
 		{
+			Root = root;
 			Pages = new ReadOnlyCollection<ScratchPage>(_pages);
 			_rootDirectory = rootDirectory;
-			var root = new DirectoryInfo(rootDirectory);
+			var rootDir = new DirectoryInfo(rootDirectory);
 			TitleCache = new LineCache(Path.Combine(_rootDirectory, "title_cache.text"));
-			_pages.AddRange(root.GetFiles("*.txt")
-				.Union(root.GetFiles("*.log"))
+			_pages.AddRange(rootDir.GetFiles("*.txt")
+				.Union(rootDir.GetFiles("*.log"))
 				.OrderBy(f => f.LastWriteTimeUtc)
 				.Select(f => Path.ChangeExtension(f.FullName, null))
 				.Distinct()
 				.Select(name => new ScratchPage(TitleCache, name)));
 		}
+
+		public ScratchRoot Root { get; }
 
 		internal LineCache TitleCache { get; }
 
@@ -274,6 +277,9 @@ namespace Barrkel.ScratchPad
 			}
 		}
 
+		/// <summary>
+		/// Returns (title, index) of each match
+		/// </summary>
 		public IEnumerable<(string, int)> SearchTitles(Regex re)
 		{
 			for (int i = Pages.Count - 1; i >= 0; --i)
@@ -283,10 +289,12 @@ namespace Barrkel.ScratchPad
 					yield return (page.Title, i);
 			}
 		}
+
+		public string Name => Path.GetFileName(_rootDirectory);
 		
 		public override string ToString()
 		{
-			return Path.GetFileName(_rootDirectory);
+			return Name;
 		}
 	}
 
@@ -311,6 +319,8 @@ namespace Barrkel.ScratchPad
 	{
 		// Get the book this view is for; the view only ever shows a single page from a book
 		ScratchBook Book { get; }
+
+		ScratchBookController Controller { get; }
 
 		// Inserts text at CurrentPosition
 		void InsertText(string text);

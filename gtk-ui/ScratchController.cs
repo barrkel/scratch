@@ -82,13 +82,26 @@ namespace Barrkel.ScratchPad
 
 			if (Scope.TryLookup(key, out var actionName))
 			{
+				if (actionName.Type != ScratchType.String)
+				{
+					Console.WriteLine("found binding for key but not of type string, was " + actionName.Type);
+					return false;
+				}
 				if (RootController.Options.DebugKeys)
 					Console.WriteLine("found key binding: {0}", actionName.StringValue);
 				if (Scope.TryLookup(actionName.StringValue, out var action))
 				{
 					if (RootController.Options.DebugKeys)
 						Console.WriteLine("found action: {0}", action);
-					action.Invoke(this, view, ScratchValue.EmptyList);
+					try
+					{
+						action.Invoke(this, view, ScratchValue.EmptyList);
+					}
+					catch (Exception ex)
+					{
+						if (RootController.Options.DebugKeys)
+							Console.WriteLine("error executing: {0}", ex.Message);
+					}
 					return true;
 				}
 				else

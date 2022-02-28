@@ -12,7 +12,7 @@ namespace Barrkel.ScratchPad
 {
 
 
-	public class LegacyLibrary : ScratchLibrary
+	public class LegacyLibrary : NativeLibrary
 	{
 		public static readonly LegacyLibrary Instance = new LegacyLibrary();
 
@@ -41,6 +41,30 @@ namespace Barrkel.ScratchPad
 			Bind("F11", new ScratchValue("navigate-contents"));
 			Bind("C-t", new ScratchValue("navigate-todo"));
 			Bind("C-n", new ScratchValue("add-new-page"));
+
+			Bind("F5", new ScratchValue("load-config"));
+		}
+
+		[Action("load-config")]
+		public void LoadConfig(IScratchBookView view, IList<ScratchValue> args)
+		{
+			// TODO: consider (re)loading for all books
+			// TODO: consider load vs reload
+			// TODO: apply configs at different levels (page / mode, root)
+			// TODO: consider adding unpersisted view-only page type for errors
+			foreach (var (title, index) in view.Book.SearchTitles(new Regex(@"^\.config\b.*")))
+			{
+				try
+				{
+					var library = ConfigFileLibrary.Load(title, view.Book.Pages[index].Text);
+					view.Controller.Scope.Load(library);
+				}
+				catch (Exception ex)
+				{
+					// it's ugly but it should work
+					view.InsertText(ex.Message);
+				}
+			}
 		}
 
 		[Action("insert-date")]

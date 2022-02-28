@@ -30,7 +30,7 @@ namespace Barrkel.ScratchPad
 		
 		TabPage CreateBookView(ScratchBook book)
 		{
-			TabPage result = new TabPage(book.ToString());
+			TabPage result = new TabPage(book.Name);
 			BookView view = new BookView(book);
 			view.Dock = DockStyle.Fill;
 			result.Controls.Add(view);

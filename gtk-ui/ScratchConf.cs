@@ -81,7 +81,124 @@ namespace Barrkel.ScratchPad
 
 		public ScratchValue Invoke(ScratchBookController controller, IScratchBookView view, IList<ScratchValue> args)
 		{
-			return ((ScratchAction)_value)(controller, view, args);
+			return ScratchValue.FromObject(((ScratchAction)_value)(controller, view, args));
+		}
+	}
+
+	public class ConfigFileLibrary : ScratchLibraryBase
+	{
+		private ConfigFileLibrary(string name) : base(name)
+		{
+		}
+
+		// Additively load bindings from text.
+		public static ConfigFileLibrary Load(string name, string source)
+		{
+			// What grammar?
+			// I want simple key-value for simple settings.
+			// I don't really want top-level interpretation at load time.
+			// I want any language of actions to be very minimal, and use symbolic actions for computation.
+			// I don't really want to write an sexpr reader but that's the level of minimality aimed for.
+
+			// How about this:
+			//   file ::= { setting } .
+			//   setting ::= (<ident> | <string>) '=' value ;
+			//   value ::= <string> | <number> | '{' { call } '}' ;
+			//   call ::= <ident> '(' value { ',' value } ')' ;
+
+			// Part of the idea is to discourage language complexity.
+			// There's no control flow here, for now; not even if, no lazy evaluation.
+			// No way to define function arguments.
+			// We'll use '#' and '//' for comments
+			ConfigFileLibrary result = new ConfigFileLibrary(name);
+
+			try
+			{
+				ScopeLexer lexer = new ScopeLexer(source);
+
+				// skip first line (title)
+				lexer.SkipPastEol();
+				lexer.NextToken();
+
+				while (lexer.CurrToken != ScopeToken.Eof)
+				{
+					// setting ::= (<ident> | <string>) '=' value ;
+					lexer.ExpectEither(ScopeToken.Ident, ScopeToken.String);
+					string ident = lexer.StringValue;
+					lexer.NextToken();
+					lexer.Eat(ScopeToken.Eq);
+					var value = ParseValue(lexer);
+					result.Bindings.Add(ident, value);
+					Console.WriteLine("Bound {0} to {1}", ident, value);
+				}
+
+				return result;
+			}
+			catch (Exception ex)
+			{
+				throw new ArgumentException($"{name}: {ex.Message}", ex);
+			}
+		}
+
+		private static ScratchValue ParseValue(ScopeLexer lexer)
+		{
+			ScratchValue result;
+			// value ::= <string> | <number> | '{' { call } '}' ;
+			switch (lexer.CurrToken)
+			{
+				case ScopeToken.String:
+					result = new ScratchValue(lexer.StringValue);
+					lexer.NextToken();
+					return result;
+
+				case ScopeToken.Int32:
+					result = new ScratchValue(lexer.Int32Value);
+					lexer.NextToken();
+					return result;
+
+				case ScopeToken.LBrace:
+					lexer.NextToken();
+					// call ::= <ident> '(' value { ',' value } ')' ;
+					var calls = new List<(string, List<ScratchValue>)>();
+					while (lexer.CurrToken == ScopeToken.Ident)
+					{
+						string name = lexer.StringValue;
+						lexer.NextToken();
+						lexer.Eat(ScopeToken.LParen);
+						var args = new List<ScratchValue>();
+						while (lexer.IsNot(ScopeToken.Eof, ScopeToken.RParen))
+						{
+							args.Add(ParseValue(lexer));
+							if (lexer.CurrToken == ScopeToken.Comma)
+								lexer.NextToken();
+							else
+								break;
+						}
+						lexer.Eat(ScopeToken.RParen);
+						calls.Add((name, args));
+						// create a lambda with late-bound lookups for all symbols
+						// TODO: one day consider using another scope to store argument bindings 
+						// (which needs argument syntax)
+					}
+					lexer.Eat(ScopeToken.RBrace);
+					return new ScratchValue((controller, view, _) =>
+					{
+						try
+						{
+							ScratchValue r = ScratchValue.Null;
+							foreach (var (n, a) in calls)
+								r = controller.Scope.Lookup(n).Invoke(controller, view, a);
+							return r;
+						}
+						catch (Exception ex)
+						{
+							Console.Error.WriteLine("call blew up: " + ex.Message);
+							return ScratchValue.Null;
+						}
+					});
+			}
+
+			throw lexer.Error($"Expected: string, int or {{, got {lexer.CurrToken}");
 		}
 	}
 
@@ -102,7 +219,7 @@ namespace Barrkel.ScratchPad
 	class ScopeLexer
 	{
 		private int _currPos;
-		private int _lineNum;
+		private int _lineNum = 1;
 
 		public string Source { get; }
 		public ScopeToken CurrToken { get; private set; }
@@ -112,10 +229,10 @@ namespace Barrkel.ScratchPad
 		public ScopeLexer(string source)
 		{
 			Source = source;
-			NextToken();
+			// deliberately not NextToken() here
 		}
 
-		private void SkipPastEol()
+		public void SkipPastEol()
 		{
 			while (_currPos < Source.Length)
 			{
@@ -151,7 +268,7 @@ namespace Barrkel.ScratchPad
 		public void Expect(ScopeToken token)
 		{
 			if (CurrToken != token)
-				throw Error("Expected: " + token);
+				throw Error($"Expected: {token}, got {CurrToken}");
 		}
 
 		public bool IsNot(params ScopeToken[] tokens)
@@ -162,7 +279,7 @@ namespace Barrkel.ScratchPad
 		public void ExpectEither(ScopeToken thisToken, ScopeToken thatToken)
 		{
 			if (CurrToken != thisToken && CurrToken != thatToken)
-				throw Error($"Expected: {thisToken} or ${thatToken}");
+				throw Error($"Expected: {thisToken} or {thatToken}, got {CurrToken}");
 		}
 
 		internal ArgumentException Error(string message)
@@ -208,7 +325,7 @@ namespace Barrkel.ScratchPad
 					++_currPos;
 				else
 					break;
-			return Int32.Parse(Source.Substring(start, _currPos - start - 1));
+			return Int32.Parse(Source.Substring(start, _currPos - start));
 		}
 
 		private string ScanIdent()
@@ -224,7 +341,7 @@ namespace Barrkel.ScratchPad
 				else
 					break;
 			}
-			return Source.Substring(start, _currPos - start - 1);
+			return Source.Substring(start, _currPos - start);
 		}
 
 		private ScopeToken Scan()
