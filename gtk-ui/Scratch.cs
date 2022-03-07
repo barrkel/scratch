@@ -320,8 +320,6 @@ namespace Barrkel.ScratchPad
 		// Get the book this view is for; the view only ever shows a single page from a book
 		ScratchBook Book { get; }
 
-		ScratchBookController Controller { get; }
-
 		// Inserts text at CurrentPosition
 		void InsertText(string text);
 		// Delete text backwards from CurrentPosition

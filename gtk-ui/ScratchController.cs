@@ -77,43 +77,15 @@ namespace Barrkel.ScratchPad
 			string shiftPrefix = (keyName.Length > 1 && shift) ? "S-" : "";
 			string key = string.Concat(ctrlPrefix, altPrefix, shiftPrefix, keyName);
 
+			ExecutionContext context = new ExecutionContext(this, view, Scope);
+
 			if (RootController.Options.DebugKeys)
 				Console.WriteLine("debug-keys: {0}", key);
 
-			if (Scope.TryLookup(key, out var actionName))
+			if (Scope.TryLookup(key, out var action))
 			{
-				if (actionName.Type != ScratchType.String)
-				{
-					Console.WriteLine("found binding for key but not of type string, was " + actionName.Type);
-					return false;
-				}
-				if (RootController.Options.DebugKeys)
-					Console.WriteLine("found key binding: {0}", actionName.StringValue);
-				if (Scope.TryLookup(actionName.StringValue, out var action))
-				{
-					if (RootController.Options.DebugKeys)
-						Console.WriteLine("found action: {0}", action);
-					try
-					{
-						action.Invoke(this, view, ScratchValue.EmptyList);
-					}
-					catch (Exception ex)
-					{
-						if (RootController.Options.DebugKeys)
-							Console.WriteLine("error executing: {0}", ex.Message);
-					}
-					return true;
-				}
-				else
-				{
-					if (RootController.Options.DebugKeys)
-						Console.WriteLine("no action binding found");
-				}
-			}
-			else
-			{
-				if (RootController.Options.DebugKeys)
-					Console.WriteLine("no key binding found");
+				action.Invoke(context, ScratchValue.EmptyList);
+				return true;
 			}
 
 			return false;
@@ -121,14 +93,16 @@ namespace Barrkel.ScratchPad
 
 		public void InvokeAction(IScratchBookView view, string actionName, IList<ScratchValue> args)
 		{
+			ExecutionContext context = new ExecutionContext(this, view, Scope);
 			if (Scope.TryLookup(actionName, out var action))
-				action.Invoke(this, view, args);
+				action.Invoke(context, args);
 		}
 
 		public void InformEvent(IScratchBookView view, string eventName, IList<ScratchValue> args)
 		{
+			ExecutionContext context = new ExecutionContext(this, view, Scope);
 			if (Scope.TryLookup("on-" + eventName, out var action))
-				action.Invoke(this, view, args);
+				action.Invoke(context, args);
 		}
 	}
 }

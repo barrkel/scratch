@@ -55,8 +55,8 @@ namespace Barrkel.ScratchPad
 				MethodInfo method = (MethodInfo)member;
 				foreach (ActionAttribute attr in Attribute.GetCustomAttributes(member, typeof(ActionAttribute)))
 				{
-					Bindings.Add(attr.Name, new ScratchValue((controller, view, args) =>
-						(ScratchValue)method.Invoke(this, new object[] { view, args })));
+					Bindings.Add(attr.Name, new ScratchValue((context, args) =>
+						(ScratchValue)method.Invoke(this, new object[] { context, args })));
 				}
 			}
 		}
@@ -73,8 +73,8 @@ namespace Barrkel.ScratchPad
 
 		protected ScratchValue MakeInvoke(string name)
 		{
-			return new ScratchValue((controller, view, _) =>
-					controller.Scope.Lookup(name).Invoke(controller, view, ScratchValue.EmptyList));
+			return new ScratchValue((context, _) =>
+					context.Scope.Lookup(name).Invoke(context, ScratchValue.EmptyList));
 		}
 	}
 
@@ -118,6 +118,30 @@ namespace Barrkel.ScratchPad
 			if (TryLookup(name, out ScratchValue result))
 				return result;
 			throw new ArgumentException("name not found in scope: " + name);
+		}
+
+		// We model assignment as updating a binding, rather than updating a box referenced by the binding.
+		public void Assign(string name, ScratchValue value)
+		{
+			for (ScratchScope scope = this; scope != null; scope = scope.Parent)
+				if (scope.TryAssign(name, value))
+					return;
+			AssignLocal(name, value);
+		}
+
+		public void AssignLocal(string name, ScratchValue value)
+		{
+			_bindings[name] = value;
+		}
+
+		public bool TryAssign(string name, ScratchValue value)
+		{
+			if (_bindings.ContainsKey(name))
+			{
+				_bindings[name] = value;
+				return true;
+			}
+			return false;
 		}
 
 		public IEnumerator<(string, ScratchValue)> GetEnumerator()

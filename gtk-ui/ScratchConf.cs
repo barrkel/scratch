@@ -15,10 +15,53 @@ namespace Barrkel.ScratchPad
 		Null,
 		String, // string
 		Int32, // integer
+		ScratchFunction,
 		Action
 	}
 
-	public delegate ScratchValue ScratchAction(ScratchBookController controller, IScratchBookView view, IList<ScratchValue> args);
+	public class ExecutionContext
+	{
+		public ExecutionContext(ScratchBookController controller, IScratchBookView view, ScratchScope scope)
+		{
+			Controller = controller;
+			View = view;
+			Scope = scope;
+		}
+
+		public ExecutionContext CreateChild()
+		{
+			return new ExecutionContext(Controller, View, new ScratchScope(Scope));
+		}
+
+		public ScratchBookController Controller { get; }
+		public IScratchBookView View { get; }
+		public ScratchScope Scope { get; }
+	}
+
+	public delegate ScratchValue ScratchAction(ExecutionContext context, IList<ScratchValue> args);
+
+	public class ScratchFunction
+	{
+		public ScratchFunction(ScratchProgram program, List<string> parameters)
+		{
+			Program = program;
+			Parameters = new ReadOnlyCollection<string>(parameters);
+		}
+
+		public ReadOnlyCollection<string> Parameters { get; }
+		public ScratchProgram Program { get; }
+
+		public ScratchValue Invoke(ExecutionContext context, IList<ScratchValue> args)
+		{
+			ExecutionContext child = context.CreateChild();
+			if (args.Count != Parameters.Count)
+				throw new InvalidOperationException(
+					$"Parameter count mismatch: expected {Parameters.Count}, got {args.Count}");
+			for (int i = 0; i < Parameters.Count; ++i)
+				child.Scope.AssignLocal(Parameters[i], args[i]);
+			return Program.Run(context);
+		}
+	}
 
 	public class ScratchValue
 	{
@@ -51,6 +94,12 @@ namespace Barrkel.ScratchPad
 			Type = ScratchType.Action;
 		}
 
+		public ScratchValue(ScratchFunction func)
+		{
+			_value = func;
+			Type = ScratchType.ScratchFunction;
+		}
+
 		public static ScratchValue FromObject(object value)
 		{
 			switch (value)
@@ -70,6 +119,9 @@ namespace Barrkel.ScratchPad
 				case ScratchAction action:
 					return new ScratchValue(action);
 
+				case ScratchFunction func:
+					return new ScratchValue(func);
+
 				default:
 					throw new ArgumentException("Invalid type: " + value);
 			}
@@ -79,9 +131,177 @@ namespace Barrkel.ScratchPad
 		public String StringValue => (string)_value;
 		public int Int32Value => (int)_value;
 
-		public ScratchValue Invoke(ScratchBookController controller, IScratchBookView view, IList<ScratchValue> args)
+		public ScratchValue Invoke(ExecutionContext context, IList<ScratchValue> args)
 		{
-			return ScratchValue.FromObject(((ScratchAction)_value)(controller, view, args));
+			switch (Type)
+			{
+				case ScratchType.Action:
+					return ScratchValue.FromObject(((ScratchAction)_value)(context, args));
+
+				case ScratchType.ScratchFunction:
+					return ((ScratchFunction)_value).Invoke(context, args);
+
+				// invoking a string binding invokes whatever the string is itself bound to, recursively
+				// this lets us use strings as function pointers, as long as we don't mind naming our functions
+				case ScratchType.String:
+					Console.WriteLine($"Invoking {StringValue}");
+					return context.Scope.Lookup(StringValue).Invoke(context, args);
+
+				default:
+					throw new InvalidOperationException("Tried to invoke non-function: " + this);
+			}
+		}
+	}
+
+	// Basic stack machine straight from parser.
+	public class ScratchProgram
+	{
+		public enum Operation
+		{
+			// arg is name, stack is N followed by N arguments
+			Call,
+			// arg is name, value is popped.
+			// Existing binding is searched for and assigned in the scope it's found.
+			Set,
+			// Fetch value of existing binding
+			Get,
+			// Create binding in top scope and assign
+			SetLocal,
+			// Early exit from this program, result is top of stack
+			Ret
+		}
+
+		public struct Op
+		{
+			public Op(Operation op)
+			{
+				Operation = op;
+				Arg = null;
+			}
+
+			public Op(Operation op, object arg)
+			{
+				Operation = op;
+				Arg = arg;
+			}
+
+			public Operation Operation { get; }
+			public object Arg { get; }
+			public string ArgAsString => (string)Arg;
+		}
+
+		private List<Op> _ops;
+
+		public class Writer
+		{
+			Dictionary<string, int> _labels = new Dictionary<string, int>();
+			List<Op> _ops = new List<Op>();
+			List<int> _fixups = new List<int>();
+
+			public string NewLabel(string prefix)
+			{
+				string result = $"{prefix}{_labels.Count}";
+				_labels[result] = -1;
+				return result;
+			}
+
+			public void ResolveLabel(string label)
+			{
+				_labels[label] = _ops.Count;
+			}
+
+			public void AddOp(Operation op)
+			{
+				_ops.Add(new Op(op));
+			}
+
+			public void AddOpWithLabel(Operation op, string label)
+			{
+				_fixups.Add(_ops.Count);
+				_ops.Add(new Op(op, label));
+			}
+
+			public void AddOp(Operation op, object value)
+			{
+				_ops.Add(new Op(op, value));
+			}
+
+			public ScratchProgram ToProgram()
+			{
+				foreach (int fixup in _fixups)
+				{
+					string label = _ops[fixup].ArgAsString;
+					int loc = _labels[label];
+					if (loc == -1)
+						throw new Exception("Label not resolved: " + label);
+					_ops[fixup] = new Op(_ops[fixup].Operation, loc);
+				}
+				ScratchProgram result = new ScratchProgram(_ops);
+				_ops = null;
+				return result;
+			}
+		}
+
+		public static ScratchProgram WithWriter(Action<Writer> w)
+		{
+			Writer writer = new Writer();
+			w(writer);
+			return writer.ToProgram();
+		}
+
+		private ScratchProgram(List<Op> ops)
+		{
+			_ops = ops;
+		}
+
+		private ScratchValue Pop(List<ScratchValue> stack)
+		{
+			ScratchValue result = stack[stack.Count - 1];
+			stack.RemoveAt(stack.Count - 1);
+			return result;
+		}
+
+		private List<ScratchValue> PopArgList(List<ScratchValue> stack)
+		{
+			int count = Pop(stack).Int32Value;
+			var args = new List<ScratchValue>();
+			for (int i = 0; i < count; ++i)
+				args.Add(Pop(stack));
+			return args;
+		}
+
+		public ScratchValue Run(ExecutionContext context)
+		{
+			var stack = new List<ScratchValue>();
+			int ip = 0;
+
+			while (ip < _ops.Count)
+			{
+				int cp = ip++;
+				switch (_ops[cp].Operation)
+				{
+					case Operation.Get:
+						stack.Add(context.Scope.Lookup(_ops[cp].ArgAsString));
+						break;
+
+					case Operation.Ret:
+						return Pop(stack);
+
+					case Operation.Set:
+						context.Scope.Assign(_ops[cp].ArgAsString, Pop(stack));
+						break;
+
+					case Operation.SetLocal:
+						context.Scope.AssignLocal(_ops[cp].ArgAsString, Pop(stack));
+						break;
+
+					case Operation.Call:
+						stack.Add(context.Scope.Lookup(_ops[cp].ArgAsString).Invoke(context, PopArgList(stack)));
+						break;
+				}
+			}
+
+			return ScratchValue.Null;
 		}
 	}
 
@@ -94,6 +314,15 @@ namespace Barrkel.ScratchPad
 		// Additively load bindings from text.
 		public static ConfigFileLibrary Load(string name, string source)
 		{
+			// TODO: implement if; a lot of things get better with if
+			// TODO: consider early exit (return)
+			// TODO: consider error handling
+			// TODO: implement argument binding for blocks so we can write functions
+			// TODO: extend ScratchValue with basic syntax tree, mainly for easier introspection of bindings
+			// TODO: rewrite as many actions as possible in ScratchConf to get a feel for limits
+			// TODO: accept identifier syntax in more contexts if not ambiguous
+			// TODO: allow binding keys to functions directly, turns out it's tedious to have to name everything
+
 			// What grammar?
 			// I want simple key-value for simple settings.
 			// I don't really want top-level interpretation at load time.
@@ -181,13 +410,13 @@ namespace Barrkel.ScratchPad
 						// (which needs argument syntax)
 					}
 					lexer.Eat(ScopeToken.RBrace);
-					return new ScratchValue((controller, view, _) =>
+					return new ScratchValue((context, _) =>
 					{
 						try
 						{
 							ScratchValue r = ScratchValue.Null;
 							foreach (var (n, a) in calls)
-								r = controller.Scope.Lookup(n).Invoke(controller, view, a);
+								r = context.Scope.Lookup(n).Invoke(context, a);
 							return r;
 						}
 						catch (Exception ex)

@@ -1,12 +1,8 @@
 using System;
 using System.Collections.Generic;
-using System.Text;
 using System.Linq;
-using System.Collections.ObjectModel;
-using System.IO;
+using System.Text;
 using System.Text.RegularExpressions;
-using System.Reflection;
-using System.Collections;
 
 namespace Barrkel.ScratchPad
 {
@@ -22,11 +18,10 @@ namespace Barrkel.ScratchPad
 		private LegacyLibrary() : base("legacy")
 		{
 			// TODO: parse these from a config page
-			// the convention for keys is that they do a two-step
-			// Look up key name and get an action name.
-			// Look up action name and invoke that.
-			// This makes binding multiple keys to the same action easier,
-			// and potential debugging of key bindings easier.
+			// "Invoking" a string looks up the binding and invokes that, recursively.
+			// Keys are bound by binding their names.
+			// Keys may be bound to an action / scratch function directly,
+			// but because of the string invocation action, indirection works too.
 			Bind("F4", new ScratchValue("insert-date"));
 			Bind("S-F4", new ScratchValue("insert-datetime"));
 			Bind("Return", new ScratchValue("autoindent-return"));
@@ -46,81 +41,89 @@ namespace Barrkel.ScratchPad
 		}
 
 		[Action("load-config")]
-		public void LoadConfig(IScratchBookView view, IList<ScratchValue> args)
+		public void LoadConfig(ExecutionContext context, IList<ScratchValue> args)
 		{
+			context.View.EnsureSaved();
 			// TODO: consider (re)loading for all books
 			// TODO: consider load vs reload
 			// TODO: apply configs at different levels (page / mode, root)
 			// TODO: consider adding unpersisted view-only page type for errors
-			foreach (var (title, index) in view.Book.SearchTitles(new Regex(@"^\.config\b.*")))
+			foreach (var (title, index) in context.View.Book.SearchTitles(new Regex(@"^\.config\b.*")))
 			{
 				try
 				{
-					var library = ConfigFileLibrary.Load(title, view.Book.Pages[index].Text);
-					view.Controller.Scope.Load(library);
+					var library = ConfigFileLibrary.Load(title, context.View.Book.Pages[index].Text);
+					context.Controller.Scope.Load(library);
 				}
 				catch (Exception ex)
 				{
 					// it's ugly but it should work
-					view.InsertText(ex.Message);
+					context.View.InsertText(ex.Message);
 				}
 			}
 		}
 
-		[Action("insert-date")]
-		public void DoInsertDate(IScratchBookView view, IList<ScratchValue> args)
+		[Action("insert-text")]
+		public void DoInsertText(ExecutionContext context, IList<ScratchValue> args)
 		{
-			view.InsertText(DateTime.Today.ToString("yyyy-MM-dd"));
+			foreach (var arg in args.Where(x => x.Type == ScratchType.String))
+				context.View.InsertText(arg.StringValue);
+		}
+
+		[Action("insert-date")]
+		public void DoInsertDate(ExecutionContext context, IList<ScratchValue> args)
+		{
+			context.View.InsertText(DateTime.Today.ToString("yyyy-MM-dd"));
 		}
 
 		[Action("insert-datetime")]
-		public void DoInsertDateTime(IScratchBookView view, IList<ScratchValue> args)
+		public void DoInsertDateTime(ExecutionContext context, IList<ScratchValue> args)
 		{
-			view.InsertText(DateTime.Now.ToString("yyyy-MM-dd HH:mm"));
+			context.View.InsertText(DateTime.Now.ToString("yyyy-MM-dd HH:mm"));
 		}
 
 		[Action("autoindent-return")]
-		public void DoAutoindentReturn(IScratchBookView view, IList<ScratchValue> args)
+		public void DoAutoindentReturn(ExecutionContext context, IList<ScratchValue> args)
 		{
-			string text = view.CurrentText;
-			int pos = view.CurrentPosition;
+			string text = context.View.CurrentText;
+			int pos = context.View.CurrentPosition;
 			string indent = GetCurrentIndent(text, pos);
 
 			switch (IsSmartDelimiter(text, pos - 1, out char closer))
 			{
 				case SmartDelimiter.No:
-					view.InsertText(string.Format("\n{0}", indent));
+					context.View.InsertText(string.Format("\n{0}", indent));
 					break;
 
 				case SmartDelimiter.Yes:
 					// smart { etc.
-					view.InsertText(string.Format("\n{0}  \n{0}{1}", indent, closer));
-					view.CurrentPosition -= (1 + indent.Length + 1);
-					view.Selection = (view.CurrentPosition, view.CurrentPosition);
+					context.View.InsertText(string.Format("\n{0}  \n{0}{1}", indent, closer));
+					context.View.CurrentPosition -= (1 + indent.Length + 1);
+					context.View.Selection = (context.View.CurrentPosition, context.View.CurrentPosition);
 					break;
 
 				case SmartDelimiter.IndentOnly:
-					view.InsertText(string.Format("\n{0}  ", indent));
+					context.View.InsertText(string.Format("\n{0}  ", indent));
 					break;
 			}
-			view.ScrollIntoView(view.CurrentPosition);
+			context.View.ScrollIntoView(context.View.CurrentPosition);
 		}
 
 		[Action("smart-paste")]
-		public void DoSmartPaste(IScratchBookView view, IList<ScratchValue> args)
+		public void DoSmartPaste(ExecutionContext context, IList<ScratchValue> args)
 		{
-			view.SelectedText = "";
-			string textToPaste = view.Clipboard;
+			context.View.SelectedText = "";
+			string textToPaste = context.View.Clipboard;
 			if (string.IsNullOrEmpty(textToPaste))
 				return;
-			string indent = GetCurrentIndent(view.CurrentText, view.CurrentPosition);
+			string indent = GetCurrentIndent(context.View.CurrentText, context.View.CurrentPosition);
 			if (indent.Length > 0)
 				// Remove existing indent if pasted to an indent
-				view.InsertText(AddIndent(indent, ResetIndent(textToPaste), IndentOptions.SkipFirst));
+				context.View.InsertText(AddIndent(indent, ResetIndent(textToPaste), IndentOptions.SkipFirst));
 			else
 				// Preserve existing indent if from col 0
-				view.InsertText(AddIndent(indent, textToPaste, IndentOptions.SkipFirst));
-			view.ScrollIntoView(view.CurrentPosition);
+				context.View.InsertText(AddIndent(indent, textToPaste, IndentOptions.SkipFirst));
+			context.View.ScrollIntoView(context.View.CurrentPosition);
 		}
 
 		private int GetIndent(string text)
@@ -332,79 +335,79 @@ namespace Barrkel.ScratchPad
 		}
 
 		[Action("occur")]
-		public void Occur(IScratchBookView view, IList<ScratchValue> args)
+		public void Occur(ExecutionContext context, IList<ScratchValue> args)
 		{
-			var lines = GetNonEmptyLines(view.CurrentText).ToList();
-			if (view.RunSearch(pattern => FindMatchingLocations(lines, ParseRegexList(pattern, RegexOptions.Singleline)),
+			var lines = GetNonEmptyLines(context.View.CurrentText).ToList();
+			if (context.View.RunSearch(pattern => FindMatchingLocations(lines, ParseRegexList(pattern, RegexOptions.Singleline)),
 				out var pair))
 			{
 				var (pos, len) = pair;
-				view.ScrollIntoView(pos);
-				view.Selection = (pos, pos + len);
+				context.View.ScrollIntoView(pos);
+				context.View.Selection = (pos, pos + len);
 			}
 		}
 
 		[Action("navigate-title")]
-		public void NavigateTitle(IScratchBookView view, IList<ScratchValue> args)
+		public void NavigateTitle(ExecutionContext context, IList<ScratchValue> args)
 		{
-			view.EnsureSaved();
-			if (view.RunSearch(text => view.Book.SearchTitles(text).Take(100), out int found))
-				view.JumpToPage(found);
+			context.View.EnsureSaved();
+			if (context.View.RunSearch(text => context.View.Book.SearchTitles(text).Take(100), out int found))
+				context.View.JumpToPage(found);
 		}
 
 		[Action("navigate-contents")]
-		public void NavigateContents(IScratchBookView view, IList<ScratchValue> args)
+		public void NavigateContents(ExecutionContext context, IList<ScratchValue> args)
 		{
-			view.EnsureSaved();
-			if (view.RunSearch(text => TrySearch(view.Book, text).Take(50), out var triple))
+			context.View.EnsureSaved();
+			if (context.View.RunSearch(text => TrySearch(context.View.Book, text).Take(50), out var triple))
 			{
 				var (page, pos, len) = triple;
-				view.JumpToPage(page);
+				context.View.JumpToPage(page);
 				// these should probably be part of JumpToPage, to avoid the default action
-				view.ScrollIntoView(pos);
-				view.Selection = (pos, pos + len);
+				context.View.ScrollIntoView(pos);
+				context.View.Selection = (pos, pos + len);
 			}
 		}
 
 		[Action("navigate-todo")]
-		public void NavigateTodo(IScratchBookView view, IList<ScratchValue> args)
+		public void NavigateTodo(ExecutionContext context, IList<ScratchValue> args)
 		{
-			NavigateSigil(view, "=>");
+			NavigateSigil(context, "=>");
 		}
 
 		[Action("add-new-page")]
-		public void AddNewPage(IScratchBookView view, IList<ScratchValue> args)
+		public void AddNewPage(ExecutionContext context, IList<ScratchValue> args)
 		{
-			view.AddNewPage();
+			context.View.AddNewPage();
 		}
 
 		[Action("on-text-changed")]
-		public void OnTextChanged(IScratchBookView view, string[] args)
+		public void OnTextChanged(ExecutionContext context, string[] args)
 		{
 			// text has changed
 		}
 
 		[Action("indent-block")]
-		public void DoIndentBlock(IScratchBookView view, IList<ScratchValue> args)
+		public void DoIndentBlock(ExecutionContext context, IList<ScratchValue> args)
 		{
-			string text = view.SelectedText;
+			string text = context.View.SelectedText;
 			if (string.IsNullOrEmpty(text))
 			{
-				view.InsertText("  ");
+				context.View.InsertText("  ");
 				return;
 			}
-			view.SelectedText = AddIndent("  ", text, IndentOptions.SkipTrailingEmpty);
+			context.View.SelectedText = AddIndent("  ", text, IndentOptions.SkipTrailingEmpty);
 		}
 
 		[Action("unindent-block")]
-		public void DoUnindentBlock(IScratchBookView view, IList<ScratchValue> args)
+		public void DoUnindentBlock(ExecutionContext context, IList<ScratchValue> args)
 		{
 			// remove 2 spaces or a tab or one space from every line
-			string text = view.SelectedText;
+			string text = context.View.SelectedText;
 			if (string.IsNullOrEmpty(text))
 			{
 				// We insert a literal tab, but we could consider unindenting line.
-				view.InsertText("\t");
+				context.View.InsertText("\t");
 				return;
 			}
 			string[] lines = text.Split('\r', '\n');
@@ -420,31 +423,31 @@ namespace Barrkel.ScratchPad
 				else if (line.StartsWith(" "))
 					lines[i] = line.Substring(1);
 			}
-			view.SelectedText = string.Join("\n", lines);
+			context.View.SelectedText = string.Join("\n", lines);
 		}
 
 		[Action("exit-page")]
-		public void ExitPage(IScratchBookView view, IList<ScratchValue> args)
+		public void ExitPage(ExecutionContext context, IList<ScratchValue> args)
 		{
-			ScratchPage page = GetPage(view.Book, view.CurrentPageIndex);
+			ScratchPage page = GetPage(context.View.Book, context.View.CurrentPageIndex);
 			if (page == null)
 				return;
-			PageViewState state = page.GetViewState(view);
-			state.CurrentSelection = view.Selection;
-			state.CurrentScrollPos = view.ScrollPos;
+			PageViewState state = page.GetViewState(context.View);
+			state.CurrentSelection = context.View.Selection;
+			state.CurrentScrollPos = context.View.ScrollPos;
 		}
 
 		[Action("enter-page")]
-		public void EnterPage(IScratchBookView view, IList<ScratchValue> args)
+		public void EnterPage(ExecutionContext context, IList<ScratchValue> args)
 		{
-			ScratchPage page = GetPage(view.Book, view.CurrentPageIndex);
+			ScratchPage page = GetPage(context.View.Book, context.View.CurrentPageIndex);
 			if (page == null)
 				return;
-			PageViewState state = page.GetViewState(view);
+			PageViewState state = page.GetViewState(context.View);
 			if (state.CurrentSelection.HasValue)
-				view.Selection = state.CurrentSelection.Value;
+				context.View.Selection = state.CurrentSelection.Value;
 			if (state.CurrentScrollPos.HasValue)
-				view.ScrollPos = state.CurrentScrollPos.Value;
+				context.View.ScrollPos = state.CurrentScrollPos.Value;
 		}
 
 		[Flags]
@@ -505,22 +508,22 @@ namespace Barrkel.ScratchPad
 		}
 
 		[Action("goto-sol")]
-		public void GotoSol(IScratchBookView view, IList<ScratchValue> args)
+		public void GotoSol(ExecutionContext context, IList<ScratchValue> args)
 		{
 			// NOTE: does not extend selection
-			string text = view.CurrentText;
-			int pos = view.CurrentPosition;
+			string text = context.View.CurrentText;
+			int pos = context.View.CurrentPosition;
 			int sol = GetLineStart(text, pos);
-			view.Selection = (sol, sol);
+			context.View.Selection = (sol, sol);
 		}
 
 		[Action("goto-eol")]
-		public void GotoEol(IScratchBookView view, IList<ScratchValue> args)
+		public void GotoEol(ExecutionContext context, IList<ScratchValue> args)
 		{
-			string text = view.CurrentText;
-			int pos = view.CurrentPosition;
+			string text = context.View.CurrentText;
+			int pos = context.View.CurrentPosition;
 			int eol = GetLineEnd(text, pos);
-			view.Selection = (eol, eol);
+			context.View.Selection = (eol, eol);
 		}
 
 		// starting at position-1, keep going backwards until test fails
@@ -585,25 +588,25 @@ namespace Barrkel.ScratchPad
 		}
 
 		[Action("check-for-save")]
-		internal ScratchValue CheckForSave(IScratchBookView view, IList<ScratchValue> args)
+		internal ScratchValue CheckForSave(ExecutionContext context, IList<ScratchValue> args)
 		{
 			// ...
 			return ScratchValue.Null;
 		}
 
 		[Action("complete")]
-		public void CompleteAtPoint(IScratchBookView view, IList<ScratchValue> args)
+		public void CompleteAtPoint(ExecutionContext context, IList<ScratchValue> args)
 		{
 			// Emacs-style complete-at-point
 			// foo| -> find symbols starting with foo and complete first found (e.g. 'bar')
 			// foo[bar]| -> after completing [bar], find symbols starting with foo and complete first after 'bar'
 			// If cursor isn't exactly at the end of a completion, we don't resume; we try from scratch.
 			// Completion symbols come from all words ([A-Za-z0-9_-]+) in the document.
-			var page = GetPage(view.Book, view.CurrentPageIndex);
-			string text = view.CurrentText;
-			var state = page.GetViewState(view);
+			var page = GetPage(context.View.Book, context.View.CurrentPageIndex);
+			string text = context.View.CurrentText;
+			var state = page.GetViewState(context.View);
 			var (currentStart, currentEnd) = state.CurrentCompletion.GetValueOrDefault();
-			var currentPos = view.CurrentPosition;
+			var currentPos = context.View.CurrentPosition;
 			string prefix, suffix;
 			if (currentStart < currentEnd && currentPos == currentEnd)
 			{
@@ -616,7 +619,7 @@ namespace Barrkel.ScratchPad
 				suffix = "";
 				currentStart = currentPos;
 			}
-			List<string> completions = GetCompletions(view.Book, text, char.IsLetterOrDigit);
+			List<string> completions = GetCompletions(context.View.Book, text, char.IsLetterOrDigit);
 
 			int currentIndex = completions.IndexOf(prefix + suffix);
 			if (currentIndex == -1)
@@ -631,8 +634,8 @@ namespace Barrkel.ScratchPad
 					break;
 				}
 			if (suffix.Length > 0)
-				view.DeleteTextBackwards(suffix.Length);
-			view.InsertText(nextSuffix);
+				context.View.DeleteTextBackwards(suffix.Length);
+			context.View.InsertText(nextSuffix);
 			state.CurrentCompletion = (currentStart, currentStart + nextSuffix.Length);
 		}
 
@@ -643,17 +646,17 @@ namespace Barrkel.ScratchPad
 			return book.Pages[index];
 		}
 
-		private void NavigateSigil(IScratchBookView view, string sigil)
+		private void NavigateSigil(ExecutionContext context, string sigil)
 		{
-			view.EnsureSaved();
-			if (view.RunSearch(text => TrySearch(view.Book, $"^\\s*{Regex.Escape(sigil)}.*{text}",
+			context.View.EnsureSaved();
+			if (context.View.RunSearch(text => TrySearch(context.View.Book, $"^\\s*{Regex.Escape(sigil)}.*{text}",
 				SearchOptions.TitleLinkToFirstResult).Take(50), out var triple))
 			{
 				var (page, pos, len) = triple;
-				view.JumpToPage(page);
+				context.View.JumpToPage(page);
 				// these should probably be part of JumpToPage, to avoid the default action
-				view.ScrollIntoView(pos);
-				view.Selection = (pos, pos + len);
+				context.View.ScrollIntoView(pos);
+				context.View.Selection = (pos, pos + len);
 			}
 		}
 
