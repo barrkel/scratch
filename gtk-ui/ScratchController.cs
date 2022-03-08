@@ -84,7 +84,14 @@ namespace Barrkel.ScratchPad
 
 			if (Scope.TryLookup(key, out var action))
 			{
-				action.Invoke(context, ScratchValue.EmptyList);
+				try
+				{
+					action.Invoke(context, ScratchValue.EmptyList);
+				}
+				catch (Exception ex)
+				{
+					Console.Error.WriteLine(ex.Message);
+				}
 				return true;
 			}
 
