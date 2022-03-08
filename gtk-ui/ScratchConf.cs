@@ -158,6 +158,9 @@ namespace Barrkel.ScratchPad
 	{
 		public enum Operation
 		{
+			// arg is ScratchValue to push
+			Push,
+			Pop,
 			// arg is name, stack is N followed by N arguments
 			Call,
 			// arg is name, value is popped.
@@ -168,7 +171,7 @@ namespace Barrkel.ScratchPad
 			// Create binding in top scope and assign
 			SetLocal,
 			// Early exit from this program, result is top of stack
-			Ret
+			Ret,
 		}
 
 		public struct Op
@@ -179,15 +182,15 @@ namespace Barrkel.ScratchPad
 				Arg = null;
 			}
 
-			public Op(Operation op, object arg)
+			public Op(Operation op, ScratchValue arg)
 			{
 				Operation = op;
 				Arg = arg;
 			}
 
 			public Operation Operation { get; }
-			public object Arg { get; }
-			public string ArgAsString => (string)Arg;
+			public ScratchValue Arg { get; }
+			public string ArgAsString => Arg.StringValue;
 		}
 
 		private List<Op> _ops;
@@ -218,10 +221,10 @@ namespace Barrkel.ScratchPad
 			public void AddOpWithLabel(Operation op, string label)
 			{
 				_fixups.Add(_ops.Count);
-				_ops.Add(new Op(op, label));
+				_ops.Add(new Op(op, new ScratchValue(label)));
 			}
 
-			public void AddOp(Operation op, object value)
+			public void AddOp(Operation op, ScratchValue value)
 			{
 				_ops.Add(new Op(op, value));
 			}
@@ -234,7 +237,7 @@ namespace Barrkel.ScratchPad
 					int loc = _labels[label];
 					if (loc == -1)
 						throw new Exception("Label not resolved: " + label);
-					_ops[fixup] = new Op(_ops[fixup].Operation, loc);
+					_ops[fixup] = new Op(_ops[fixup].Operation, new ScratchValue(loc));
 				}
 				ScratchProgram result = new ScratchProgram(_ops);
 				_ops = null;
@@ -267,6 +270,8 @@ namespace Barrkel.ScratchPad
 			var args = new List<ScratchValue>();
 			for (int i = 0; i < count; ++i)
 				args.Add(Pop(stack));
+			// Args are pushed left to right so they pop off from right to left
+			args.Reverse();
 			return args;
 		}
 
@@ -280,6 +285,14 @@ namespace Barrkel.ScratchPad
 				int cp = ip++;
 				switch (_ops[cp].Operation)
 				{
+					case Operation.Push:
+						stack.Add((ScratchValue)_ops[cp].Arg);
+						break;
+
+					case Operation.Pop:
+						Pop(stack);
+						break;
+
 					case Operation.Get:
 						stack.Add(context.Scope.Lookup(_ops[cp].ArgAsString));
 						break;
@@ -386,48 +399,51 @@ namespace Barrkel.ScratchPad
 					return result;
 
 				case ScopeToken.LBrace:
-					lexer.NextToken();
-					// call ::= <ident> '(' value { ',' value } ')' ;
-					var calls = new List<(string, List<ScratchValue>)>();
-					while (lexer.CurrToken == ScopeToken.Ident)
-					{
-						string name = lexer.StringValue;
-						lexer.NextToken();
-						lexer.Eat(ScopeToken.LParen);
-						var args = new List<ScratchValue>();
-						while (lexer.IsNot(ScopeToken.Eof, ScopeToken.RParen))
-						{
-							args.Add(ParseValue(lexer));
-							if (lexer.CurrToken == ScopeToken.Comma)
-								lexer.NextToken();
-							else
-								break;
-						}
-						lexer.Eat(ScopeToken.RParen);
-						calls.Add((name, args));
-						// create a lambda with late-bound lookups for all symbols
-						// TODO: one day consider using another scope to store argument bindings 
-						// (which needs argument syntax)
-					}
-					lexer.Eat(ScopeToken.RBrace);
-					return new ScratchValue((context, _) =>
-					{
-						try
-						{
-							ScratchValue r = ScratchValue.Null;
-							foreach (var (n, a) in calls)
-								r = context.Scope.Lookup(n).Invoke(context, a);
-							return r;
-						}
-						catch (Exception ex)
-						{
-							Console.Error.WriteLine("call blew up: " + ex.Message);
-							return ScratchValue.Null;
-						}
-					});
+					return new ScratchValue(new ScratchFunction(CompileProgram(lexer), new List<string>()));
 			}
 
 			throw lexer.Error($"Expected: string, int or {{, got {lexer.CurrToken}");
+		}
+
+		private static ScratchProgram CompileProgram(ScopeLexer lexer)
+		{
+			var w = new ScratchProgram.Writer();
+			lexer.Eat(ScopeToken.LBrace);
+			// only calls for now, matching previous semantics
+			// call ::= <ident> '(' value { ',' value } ')' ;
+			bool prevRetValOnStack = false;
+			while (lexer.CurrToken == ScopeToken.Ident)
+			{
+				if (prevRetValOnStack)
+					w.AddOp(ScratchProgram.Operation.Pop);
+				string name = lexer.StringValue;
+				lexer.NextToken();
+				lexer.Eat(ScopeToken.LParen);
+				int argCount = 0;
+				while (lexer.IsNot(ScopeToken.Eof, ScopeToken.RParen))
+				{
+					++argCount;
+					CompileValue(w, lexer);
+					if (lexer.CurrToken == ScopeToken.Comma)
+						lexer.NextToken();
+					else
+						break;
+				}
+				lexer.Eat(ScopeToken.RParen);
+				w.AddOp(ScratchProgram.Operation.Push, new ScratchValue(argCount));
+				w.AddOp(ScratchProgram.Operation.Call, new ScratchValue(name));
+				prevRetValOnStack = true;
+			}
+			lexer.Eat(ScopeToken.RBrace);
+			w.AddOp(ScratchProgram.Operation.Ret);
+			return w.ToProgram();
+		}
+
+		private static void CompileValue(ScratchProgram.Writer w, ScopeLexer lexer)
+		{
+			// value ::= <string> | <number> | '{' { call } '}' ;
+			// ParseValue only handles literals but that'll do for now
+			w.AddOp(ScratchProgram.Operation.Push, ParseValue(lexer));
 		}
 	}
 
