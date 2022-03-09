@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -63,6 +64,114 @@ namespace Barrkel.ScratchPad
 			}
 		}
 
+		[Action("open")]
+		public void DoOpen(ExecutionContext context, IList<ScratchValue> args)
+		{
+			if (args.Count != 1)
+				throw new ArgumentException($"Expected exactly one argument to open, got {args.Count}");
+			Process.Start(args[0].StringValue);
+		}
+
+		[Action("exec")]
+		public void DoExec(ExecutionContext context, IList<ScratchValue> args)
+		{
+			// TODO: upgrade to .net Core and use ArgumentList
+			ProcessStartInfo info = new ProcessStartInfo(args[0].StringValue,
+				string.Join(" ", args.Skip(1).Select(x => x.StringValue)))
+			{
+				UseShellExecute = false
+			};
+			Process.Start(info);
+		}
+
+		[Action("gsub")]
+		public ScratchValue DoGsub(ExecutionContext context, IList<ScratchValue> args)
+		{
+			// args: (text-to-scan, regex, replacement)
+			Regex re = new Regex(args[1].StringValue,
+				RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled,
+				TimeSpan.FromSeconds(1));
+			return new ScratchValue(re.Replace(args[0].StringValue, args[2].StringValue));
+		}
+
+		[Action("match-re")]
+		public ScratchValue DoMatchRe(ExecutionContext context, IList<ScratchValue> args)
+		{
+			// args: (text-to-scan, regex)
+			// return text of matching regex if match, null otherwise
+			Regex re = new Regex(args[1].StringValue,
+				RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled,
+				TimeSpan.FromSeconds(1));
+			Match m = re.Match(args[0].StringValue);
+			if (m.Success)
+				return new ScratchValue(m.Value);
+			return ScratchValue.Null;
+		}
+
+		[Action("get-cursor-text-re")]
+		public ScratchValue DoGetCursorTextRe(ExecutionContext context, IList<ScratchValue> args)
+		{
+			// get-cursor-text-regex(regex) -> returns earliest text matching regex under cursor
+			// Because regex won't scan backwards and we want to extract a word under cursor,
+			// we use a hokey algorithm: 
+			// start := cursorPos
+			// result := ''
+			// begin loop
+			//   match regex at start
+			//   if match does not include cursor position, break
+			//   result := regex match
+			//   set start to start - 1
+			// end loop
+			// return result
+			int currPos = context.View.CurrentPosition;
+			// Regex caches compiled regexes, we expect reuse of the same extractions.
+			Regex re = new Regex(args[0].StringValue, 
+				RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled,
+				TimeSpan.FromSeconds(1));
+			string match = "";
+			string currentText = context.View.CurrentText;
+			int startPos = currPos;
+			while (startPos > 0)
+			{
+				Match m = re.Match(currentText, startPos);
+				if (!m.Success)
+					// but we allow one step back for cursor at end
+					if (startPos == currPos)
+					{
+						--startPos;
+						continue;
+					}
+					else
+						break;
+
+				// regex must match immediately
+				if (m.Index != startPos)
+				{
+					// second chance, step back
+					if (startPos == currPos)
+					{
+						--startPos;
+						continue;
+					}
+					break;
+				}
+				// match must include cursor (cursor at end is ok though)
+				if (m.Index + m.Length < currPos - 1)
+					break;
+				match = m.Value;
+				--startPos;
+			}
+			return match == ""
+				? ScratchValue.Null
+				: new ScratchValue(match);
+		}
+
+		[Action("dp")]
+		public void DoDebugPrint(ExecutionContext context, IList<ScratchValue> args)
+		{
+			Console.WriteLine(string.Join(" ", args));
+		}
+
 		[Action("insert-text")]
 		public void DoInsertText(ExecutionContext context, IList<ScratchValue> args)
 		{
@@ -116,6 +225,8 @@ namespace Barrkel.ScratchPad
 			string textToPaste = context.View.Clipboard;
 			if (string.IsNullOrEmpty(textToPaste))
 				return;
+			if (context.Scope.TryLookup("paste-filter", out var pasteFilter))
+				textToPaste = pasteFilter.Invoke(context, new ScratchValue(textToPaste)).StringValue;
 			string indent = GetCurrentIndent(context.View.CurrentText, context.View.CurrentPosition);
 			if (indent.Length > 0)
 				// Remove existing indent if pasted to an indent

@@ -156,6 +156,7 @@ namespace Barrkel.ScratchPad
 		}
 	}
 
+	// TODO: implement arg type validator
 	[AttributeUsage(AttributeTargets.Method, Inherited = false, AllowMultiple = true)]
 	public class ActionAttribute : Attribute
 	{

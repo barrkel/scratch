@@ -145,6 +145,11 @@ namespace Barrkel.ScratchPad
 		public String StringValue => (string)_value;
 		public int Int32Value => (int)_value;
 
+		public ScratchValue Invoke(ExecutionContext context, params ScratchValue[] args)
+		{
+			return Invoke(context, (IList<ScratchValue>)args);
+		}
+
 		public ScratchValue Invoke(ExecutionContext context, IList<ScratchValue> args)
 		{
 			switch (Type)
@@ -192,6 +197,12 @@ namespace Barrkel.ScratchPad
 			SetLocal,
 			// Early exit from this program, result is top of stack
 			Ret,
+			// Pop stack, jump if null
+			JumpIfNull,
+			// Pop stack, jump if not null
+			JumpIfNotNull,
+			// Unconditional jump
+			Jump,
 		}
 
 		public struct Op
@@ -220,22 +231,32 @@ namespace Barrkel.ScratchPad
 
 		private List<Op> _ops;
 
+		public struct Label
+		{
+			public Label(string value)
+			{
+				Value = value;
+			}
+
+			public string Value { get; }
+		}
+
 		public class Writer
 		{
 			Dictionary<string, int> _labels = new Dictionary<string, int>();
 			List<Op> _ops = new List<Op>();
 			List<int> _fixups = new List<int>();
 
-			public string NewLabel(string prefix)
+			public Label NewLabel(string prefix)
 			{
 				string result = $"{prefix}{_labels.Count}";
 				_labels[result] = -1;
-				return result;
+				return new Label(result);
 			}
 
-			public void ResolveLabel(string label)
+			public void ResolveLabel(Label label)
 			{
-				_labels[label] = _ops.Count;
+				_labels[label.Value] = _ops.Count;
 			}
 
 			public void AddOp(Operation op)
@@ -243,10 +264,10 @@ namespace Barrkel.ScratchPad
 				_ops.Add(new Op(op));
 			}
 
-			public void AddOpWithLabel(Operation op, string label)
+			public void AddOpWithLabel(Operation op, Label label)
 			{
 				_fixups.Add(_ops.Count);
-				_ops.Add(new Op(op, new ScratchValue(label)));
+				_ops.Add(new Op(op, new ScratchValue(label.Value)));
 			}
 
 			public void AddOp(Operation op, ScratchValue value)
@@ -330,6 +351,20 @@ namespace Barrkel.ScratchPad
 					case Operation.Ret:
 						return Pop(stack);
 
+					case Operation.Jump:
+						ip = _ops[cp].Arg.Int32Value;
+						break;
+
+					case Operation.JumpIfNull:
+						if (Pop(stack).Type == ScratchType.Null)
+							ip = _ops[cp].Arg.Int32Value;
+						break;
+
+					case Operation.JumpIfNotNull:
+						if (Pop(stack).Type != ScratchType.Null)
+							ip = _ops[cp].Arg.Int32Value;
+						break;
+
 					case Operation.Set:
 						context.Scope.Assign(_ops[cp].ArgAsString, Peek(stack));
 						break;
@@ -365,7 +400,7 @@ namespace Barrkel.ScratchPad
 			// TODO: implement if; a lot of things get better with if
 			// TODO: consider early exit (return)
 			// TODO: consider error handling
-			// TODO: implement argument binding for blocks so we can write functions
+			// DONE: implement argument binding for blocks so we can write functions
 			// TODO: extend ScratchValue with basic syntax tree, mainly for easier introspection of bindings
 			// TODO: rewrite as many actions as possible in ScratchConf to get a feel for limits
 			// TODO: accept identifier syntax in more contexts if not ambiguous
@@ -374,17 +409,22 @@ namespace Barrkel.ScratchPad
 			/*
 			   Grammar:
 				  file ::= { setting } .
-				  setting ::= (<ident> | <string>) '=' literal ;
+				  setting ::= (<ident> | <string>) '=' ( literal | <ident> ) ;
 				  literal ::= <string> | <number> | block ;
-				  block ::= '{' [paramList] { expr } '}' ;
-				  paramList ::= '|' { <ident> } '|' ;
-				  expr ::= callOrAssign | literal ;
-				  callOrAssign ::= <ident> ( 
-					  ['(' { expr } ')']  // invoke binding
-					| '=' expr            // assign to binding, wherever found
-					| ':=' expr           // assign to local binding
-					|                     // fetch value of binding
+				  block ::= '{' [paramList] exprList '}' ;
+				  paramList ::= '|' [ <ident> { ',' <ident> } ] '|' ;
+				  expr ::= callOrAssign | literal | if ;
+				  callOrAssign ::= <ident>
+					( ['(' [ expr { ',' expr } ] ')']
+					| '=' expr
+					| ':=' expr
+					| 
 					) ;
+				  exprList = { expr } ;
+				  if ::= 
+					'if' expr '{' exprList '}'
+					[ 'else' (if | '{' exprList '}') ]
+					;
 			 */
 
 			ConfigFileLibrary result = new ConfigFileLibrary(name);
@@ -399,12 +439,12 @@ namespace Barrkel.ScratchPad
 
 				while (lexer.CurrToken != ScopeToken.Eof)
 				{
-					// setting ::= (<ident> | <string>) '=' literal ;
+					// setting ::= (<ident> | <string>) '=' ( literal | <ident> ) ;
 					lexer.ExpectEither(ScopeToken.Ident, ScopeToken.String);
 					string ident = lexer.StringValue;
 					lexer.NextToken();
 					lexer.Eat(ScopeToken.Eq);
-					var value = ParseLiteral(lexer);
+					var value = ParseSettingValue(lexer);
 					result.Bindings.Add(ident, value);
 					Console.WriteLine("Bound {0} to {1}", ident, value);
 				}
@@ -415,6 +455,17 @@ namespace Barrkel.ScratchPad
 			{
 				throw new ArgumentException($"{name}: {ex.Message}", ex);
 			}
+		}
+
+		private static ScratchValue ParseSettingValue(ScopeLexer lexer)
+		{
+			if (lexer.CurrToken == ScopeToken.Ident)
+			{
+				var result = new ScratchValue(lexer.StringValue);
+				lexer.NextToken();
+				return result;
+			}
+			return ParseLiteral(lexer);
 		}
 
 		private static ScratchValue ParseLiteral(ScopeLexer lexer)
@@ -443,7 +494,7 @@ namespace Barrkel.ScratchPad
 		private static ScratchFunction CompileBlock(ScopeLexer lexer)
 		{
 			var w = new ScratchProgram.Writer();
-			// block ::= '{' [paramList] { expr } '}' ;
+			// block ::= '{' [paramList] exprList '}' ;
 			lexer.Eat(ScopeToken.LBrace);
 
 			// paramList ::= '|' { <ident> } '|' ;
@@ -464,77 +515,142 @@ namespace Barrkel.ScratchPad
 				lexer.Eat(ScopeToken.Bar);
 			}
 
+			CompileExprList(w, lexer);
+
+			w.AddOp(ScratchProgram.Operation.Ret);
+			return new ScratchFunction(w.ToProgram(), paramList);
+		}
+
+		private static void CompileExprList(ScratchProgram.Writer w, ScopeLexer lexer, 
+			ScopeToken stopToken = ScopeToken.RBrace)
+		{
 			bool prevRetValOnStack = false;
-			while (lexer.IsNot(ScopeToken.Eof, ScopeToken.RBrace))
+			while (lexer.IsNot(ScopeToken.Eof, stopToken))
 			{
 				if (prevRetValOnStack)
 					w.AddOp(ScratchProgram.Operation.Pop);
 				CompileExpr(w, lexer);
 				prevRetValOnStack = true;
 			}
-			lexer.Eat(ScopeToken.RBrace);
+			lexer.Eat(stopToken);
 			if (!prevRetValOnStack)
 				w.AddOp(ScratchProgram.Operation.Push, ScratchValue.Null);
-			w.AddOp(ScratchProgram.Operation.Ret);
-			return new ScratchFunction(w.ToProgram(), paramList);
 		}
 
 		private static void CompileExpr(ScratchProgram.Writer w, ScopeLexer lexer)
 		{
-			//  expr ::= callOrAssign | literal ;
+			//  expr ::= callOrAssign | literal | if ;
 
-			if (lexer.CurrToken == ScopeToken.Ident)
+			switch (lexer.CurrToken)
 			{
-				//  callOrAssign ::= <ident> ( 
-				//      ['(' { expr } ')']  // invoke binding
-				//    | '=' expr            // assign to binding, wherever found
-				//    | ':=' expr           // assign to local binding
-				//    |                     // fetch value of binding
-				//    ) ;
-
-				string name = lexer.StringValue;
-				lexer.NextToken();
-
-				switch (lexer.CurrToken)
+				case ScopeToken.Ident:
 				{
-					case ScopeToken.Eq:
-						lexer.NextToken();
-						CompileExpr(w, lexer);
-						w.AddOp(ScratchProgram.Operation.Set, new ScratchValue(name));
-						break;
+					//  callOrAssign ::= <ident>
+					//    ( ['(' { expr } ')']  // invoke binding
+					//    | '=' expr            // assign to binding, wherever found
+					//    | ':=' expr           // assign to local binding
+					//    |                     // fetch value of binding
+					//    ) ;
 
-					case ScopeToken.Assign:
-						lexer.NextToken();
-						CompileExpr(w, lexer);
-						w.AddOp(ScratchProgram.Operation.SetLocal, new ScratchValue(name));
-						break;
+					string name = lexer.StringValue;
+					lexer.NextToken();
 
-					case ScopeToken.LParen:
-						lexer.NextToken();
-						int argCount = 0;
-						while (lexer.IsNot(ScopeToken.Eof, ScopeToken.RParen))
-						{
-							++argCount;
+					switch (lexer.CurrToken)
+					{
+						case ScopeToken.Eq:
+							lexer.NextToken();
 							CompileExpr(w, lexer);
-							if (lexer.CurrToken == ScopeToken.Comma)
-								lexer.NextToken();
-							else
-								break;
-						}
-						lexer.Eat(ScopeToken.RParen);
-						w.AddOp(ScratchProgram.Operation.Push, new ScratchValue(argCount));
-						w.AddOp(ScratchProgram.Operation.Call, new ScratchValue(name));
-						break;
+							w.AddOp(ScratchProgram.Operation.Set, new ScratchValue(name));
+							break;
 
-					default:
-						w.AddOp(ScratchProgram.Operation.Get, new ScratchValue(name));
+						case ScopeToken.Assign:
+							lexer.NextToken();
+							CompileExpr(w, lexer);
+							w.AddOp(ScratchProgram.Operation.SetLocal, new ScratchValue(name));
+							break;
+
+						case ScopeToken.LParen:
+							lexer.NextToken();
+							int argCount = 0;
+							while (lexer.IsNot(ScopeToken.Eof, ScopeToken.RParen))
+							{
+								++argCount;
+								CompileExpr(w, lexer);
+								if (lexer.CurrToken == ScopeToken.Comma)
+									lexer.NextToken();
+								else
+									break;
+							}
+							lexer.Eat(ScopeToken.RParen);
+							w.AddOp(ScratchProgram.Operation.Push, new ScratchValue(argCount));
+							w.AddOp(ScratchProgram.Operation.Call, new ScratchValue(name));
+							break;
+
+						default:
+							w.AddOp(ScratchProgram.Operation.Get, new ScratchValue(name));
+							break;
+					}
+					break;
+				}
+
+				case ScopeToken.If:
+					CompileIf(w, lexer);
+					break;
+
+				default:
+					w.AddOp(ScratchProgram.Operation.Push, ParseLiteral(lexer));
+					break;
+			}
+		}
+
+		private static void CompileIf(ScratchProgram.Writer w, ScopeLexer lexer)
+		{
+			/*
+			  if ::= 
+				'if' expr '{' exprList '}'
+				[ 'else' (if | '{' exprList '}') ]
+				;
+			 */
+			var elseCase = w.NewLabel("else");
+			var afterIf = w.NewLabel("afterIf");
+			lexer.NextToken();
+			CompileExpr(w, lexer);
+			lexer.Eat(ScopeToken.LBrace);
+			w.AddOpWithLabel(ScratchProgram.Operation.JumpIfNull, elseCase);
+			CompileExprList(w, lexer);
+			w.AddOpWithLabel(ScratchProgram.Operation.Jump, afterIf);
+			while (true)
+			{
+				w.ResolveLabel(elseCase);
+				if (lexer.CurrToken == ScopeToken.Else)
+				{
+					lexer.NextToken();
+
+					if (lexer.CurrToken == ScopeToken.If)
+					{
+						elseCase = w.NewLabel("else");
+						lexer.NextToken();
+						CompileExpr(w, lexer);
+						lexer.Eat(ScopeToken.LBrace);
+						w.AddOpWithLabel(ScratchProgram.Operation.JumpIfNull, elseCase);
+						CompileExprList(w, lexer);
+						w.AddOpWithLabel(ScratchProgram.Operation.Jump, afterIf);
+					}
+					else
+					{
+						lexer.Eat(ScopeToken.LBrace);
+						CompileExprList(w, lexer);
 						break;
+					}
+				}
+				else
+				{
+					// we need to have a value from the else branch even if it's missing
+					w.AddOp(ScratchProgram.Operation.Push, ScratchValue.Null);
+					break;
 				}
 			}
-			else
-			{
-				w.AddOp(ScratchProgram.Operation.Push, ParseLiteral(lexer));
-			}
+			w.ResolveLabel(afterIf);
 		}
 	}
 
@@ -552,10 +668,14 @@ namespace Barrkel.ScratchPad
 		RBrace,
 		Bar,
 		Assign,
+		If,
+		Else,
 	}
 
 	class ScopeLexer
 	{
+		private static readonly Dictionary<string, ScopeToken> Keywords = CreateKeywordDictionary();
+
 		private int _currPos;
 		private int _lineNum = 1;
 
@@ -568,6 +688,14 @@ namespace Barrkel.ScratchPad
 		{
 			Source = source;
 			// deliberately not NextToken() here
+		}
+
+		private static Dictionary<string,ScopeToken> CreateKeywordDictionary()
+		{
+			var result = new Dictionary<string, ScopeToken>();
+			result.Add("if", ScopeToken.If);
+			result.Add("else", ScopeToken.Else);
+			return result;
 		}
 
 		public void SkipPastEol()
@@ -751,6 +879,8 @@ namespace Barrkel.ScratchPad
 			if (char.IsLetter(ch) || ch == '_' || ch == '-')
 			{
 				StringValue = ScanIdent();
+				if (Keywords.TryGetValue(StringValue, out var keyword))
+					return keyword;
 				return ScopeToken.Ident;
 			}
 
