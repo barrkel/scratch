@@ -21,21 +21,62 @@ namespace Barrkel.ScratchPad
 
 	public class ExecutionContext
 	{
+		public static readonly long MaxBackEdges = 1_000_000;
+		public static readonly int MaxExecutionDepth = 1000;
+
+		private class GlobalContext
+		{
+			public GlobalContext(ScratchBookController controller, IScratchBookView view)
+			{
+				Controller = controller;
+				View = view;
+				StartTime = DateTime.UtcNow;
+			}
+
+			public ScratchBookController Controller { get; }
+			public IScratchBookView View { get; }
+			public DateTime StartTime { get; }
+
+			// Watchdog on runaway script execution is based on back edges.
+			// Loops that reduce the value of the instruction pointer, and function returns
+			// are considered back edges. It's not perfect but trying to calculate execution time
+			// is awkward when we expect modal dialogs to be triggered from scripts.
+			public long BackEdges;
+		}
+
 		public ExecutionContext(ScratchBookController controller, IScratchBookView view, ScratchScope scope)
 		{
-			Controller = controller;
-			View = view;
+			Context = new GlobalContext(controller, view);
 			Scope = scope;
+			Depth = 0;
+		}
+
+		private ExecutionContext(ExecutionContext parent, ScratchScope childScope)
+		{
+			Context = parent.Context;
+			Scope = childScope;
+			Depth = parent.Depth + 1;
+			if (Depth > MaxExecutionDepth)
+				throw new InvalidOperationException("Execution stack too deep");
 		}
 
 		public ExecutionContext CreateChild()
 		{
-			return new ExecutionContext(Controller, View, new ScratchScope(Scope));
+			return new ExecutionContext(this, new ScratchScope(Scope));
 		}
 
-		public ScratchBookController Controller { get; }
-		public IScratchBookView View { get; }
+		private GlobalContext Context { get; }
+		public ScratchBookController Controller => Context.Controller;
+		public IScratchBookView View => Context.View;
 		public ScratchScope Scope { get; }
+		public int Depth { get; }
+
+		public void AddBackEdge()
+		{
+			++Context.BackEdges;
+			if (Context.BackEdges > MaxBackEdges)
+				throw new InvalidOperationException("Too much execution, too many back edges.");
+		}
 	}
 
 	public delegate ScratchValue ScratchAction(ExecutionContext context, IList<ScratchValue> args);
@@ -355,6 +396,7 @@ namespace Barrkel.ScratchPad
 						break;
 
 					case Operation.Ret:
+						context.AddBackEdge();
 						return Pop(stack);
 
 					case Operation.Jump:
@@ -394,8 +436,11 @@ namespace Barrkel.ScratchPad
 						stack.Add(Peek(stack));
 						break;
 				}
+				if (ip <= cp)
+					context.AddBackEdge();
 			}
 
+			context.AddBackEdge();
 			return ScratchValue.Null;
 		}
 
