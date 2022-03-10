@@ -293,6 +293,13 @@ namespace Barrkel.ScratchPad
 			Dictionary<string, int> _labels = new Dictionary<string, int>();
 			List<Op> _ops = new List<Op>();
 			List<int> _fixups = new List<int>();
+			List<Loop> _loops = new List<Loop>();
+
+			public class Loop
+			{
+				public Label Break;
+				public Label Continue;
+			}
 
 			public Label NewLabel(string prefix)
 			{
@@ -304,6 +311,26 @@ namespace Barrkel.ScratchPad
 			public void ResolveLabel(Label label)
 			{
 				_labels[label.Value] = _ops.Count;
+			}
+
+			public void EnterLoop(Label breakLabel, Label continueLabel)
+			{
+				_loops.Add(new Loop() { Break = breakLabel, Continue = continueLabel });
+			}
+
+			public void ExitLoop()
+			{
+				_loops.RemoveAt(_loops.Count - 1);
+			}
+
+			public Loop CurrentLoop
+			{
+				get
+				{
+					if (_loops.Count == 0)
+						return null;
+					return _loops[_loops.Count - 1];
+				}
 			}
 
 			public void AddOp(Operation op)
@@ -475,7 +502,7 @@ namespace Barrkel.ScratchPad
 				  literal ::= <string> | <number> | block | 'nil' ;
 				  block ::= '{' [paramList] exprList '}' ;
 				  paramList ::= '|' [ <ident> { ',' <ident> } ] '|' ;
-				  expr ::= if | orExpr | return | while ;
+				  expr ::= if | orExpr | return | while | 'break' | 'continue' ;
 				  while ::= 'while' orExpr '{' exprList '}' ;
 				  return ::= 'return' [ '(' expr ')' ] ;
 				  orExpr ::= andExpr { '||' andExpr } ;
@@ -611,10 +638,28 @@ namespace Barrkel.ScratchPad
 
 		private static void CompileExpr(ScratchProgram.Writer w, ScopeLexer lexer)
 		{
-			// expr ::= if | orExpr | return | while ;
+			// expr ::= if | orExpr | return | while | 'break' | 'continue' ;
 
 			switch (lexer.CurrToken)
 			{
+				case ScopeToken.Break:
+				{
+					var loop = w.CurrentLoop;
+					if (loop == null)
+						throw lexer.Error("break used outside loop");
+					w.AddOpWithLabel(ScratchProgram.Operation.Jump, loop.Break);
+					break;
+				}
+
+				case ScopeToken.Continue:
+				{
+					var loop = w.CurrentLoop;
+					if (loop == null)
+						throw lexer.Error("continue used outside loop");
+					w.AddOpWithLabel(ScratchProgram.Operation.Jump, loop.Continue);
+					break;
+				}
+
 				case ScopeToken.If:
 					CompileIf(w, lexer);
 					break;
@@ -838,6 +883,8 @@ namespace Barrkel.ScratchPad
 		Nil,
 		Return,
 		While,
+		Break,
+		Continue,
 	}
 
 	class ScopeLexer
@@ -864,6 +911,8 @@ namespace Barrkel.ScratchPad
 			var result = new Dictionary<string, ScopeToken>();
 			result.Add("if", ScopeToken.If);
 			result.Add("while", ScopeToken.While);
+			result.Add("break", ScopeToken.Break);
+			result.Add("continue", ScopeToken.Continue);
 			result.Add("else", ScopeToken.Else);
 			result.Add("nil", ScopeToken.Nil);
 			result.Add("return", ScopeToken.Return);
