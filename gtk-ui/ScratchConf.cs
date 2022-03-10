@@ -21,7 +21,7 @@ namespace Barrkel.ScratchPad
 
 	public class ExecutionContext
 	{
-		public static readonly long MaxBackEdges = 1_000_000;
+		public static readonly long MaxBackEdges = 50_000;
 		public static readonly int MaxExecutionDepth = 1000;
 
 		private class GlobalContext

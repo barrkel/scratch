@@ -44,6 +44,8 @@ namespace Barrkel.ScratchPad
 		}
 	}
 
+	delegate void ScratchActionVoid(ExecutionContext context, IList<ScratchValue> args);
+
 	public abstract class NativeLibrary : ScratchLibraryBase
 	{
 		protected NativeLibrary(string name) : base(name)
@@ -55,8 +57,29 @@ namespace Barrkel.ScratchPad
 				MethodInfo method = (MethodInfo)member;
 				foreach (ActionAttribute attr in Attribute.GetCustomAttributes(member, typeof(ActionAttribute)))
 				{
-					Bindings.Add(attr.Name, new ScratchValue((context, args) =>
-						(ScratchValue)method.Invoke(this, new object[] { context, args })));
+					ScratchAction action;
+					try
+					{
+						if (method.ReturnType == typeof(void))
+						{
+							ScratchActionVoid voidAction =
+								(ScratchActionVoid)Delegate.CreateDelegate(typeof(ScratchActionVoid), this, method, true);
+							action = (context, args) =>
+							{
+								voidAction(context, args);
+								return ScratchValue.Null;
+							};
+						}
+						else
+						{
+							action = (ScratchAction)Delegate.CreateDelegate(typeof(ScratchAction), this, method, true);
+						}
+						Bindings.Add(attr.Name, new ScratchValue(action));
+					}
+					catch (Exception ex)
+					{
+						Console.WriteLine("Error binding {0}: {1}", method.Name, ex.Message);
+					}
 				}
 			}
 		}

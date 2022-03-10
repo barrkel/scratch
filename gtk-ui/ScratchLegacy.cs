@@ -447,7 +447,7 @@ namespace Barrkel.ScratchPad
 		}
 
 		[Action("on-text-changed")]
-		public void OnTextChanged(ExecutionContext context, string[] args)
+		public void OnTextChanged(ExecutionContext context, IList<ScratchValue> args)
 		{
 			// text has changed
 		}

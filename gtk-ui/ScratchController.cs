@@ -32,6 +32,7 @@ namespace Barrkel.ScratchPad
 			result = new ScratchBookController(this, book);
 			_controllerMap.Add(book, result);
 			RootScope.Load(LegacyLibrary.Instance);
+			RootScope.Load(ScratchLib.Instance);
 			return result;
 		}
 
