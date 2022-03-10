@@ -108,6 +108,36 @@ namespace Barrkel.ScratchPad
 			return ScratchValue.Null;
 		}
 
+		[Action("concat")]
+		public ScratchValue DoConcat(ExecutionContext context, IList<ScratchValue> args)
+		{
+			StringBuilder result = new StringBuilder();
+			foreach (var sv in args)
+			{
+				switch (sv.Type)
+				{
+					case ScratchType.Int32:
+						result.Append(sv.Int32Value);
+						break;
+
+					case ScratchType.String:
+						result.Append(sv.StringValue);
+						break;
+
+					default:
+						break;
+				}
+			}
+			return new ScratchValue(result.ToString());
+		}
+
+		[Action("format")]
+		public ScratchValue DoFormat(ExecutionContext context, IList<ScratchValue> args)
+		{
+			return new ScratchValue(string.Format(args[0].StringValue, 
+				args.Skip(1).Select(x => x.ObjectValue).ToArray()));
+		}
+
 		[Action("get-cursor-text-re")]
 		public ScratchValue DoGetCursorTextRe(ExecutionContext context, IList<ScratchValue> args)
 		{

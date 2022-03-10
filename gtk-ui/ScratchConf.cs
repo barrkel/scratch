@@ -144,6 +144,9 @@ namespace Barrkel.ScratchPad
 		public ScratchType Type { get; }
 		public String StringValue => (string)_value;
 		public int Int32Value => (int)_value;
+		public bool IsTrue => Type != ScratchType.Null;
+		public bool IsFalse => Type == ScratchType.Null;
+		public object ObjectValue => _value;
 
 		public ScratchValue Invoke(ExecutionContext context, params ScratchValue[] args)
 		{
@@ -203,6 +206,9 @@ namespace Barrkel.ScratchPad
 			JumpIfNotNull,
 			// Unconditional jump
 			Jump,
+			// Boolean not
+			Not,
+			Dup,
 		}
 
 		public struct Op
@@ -356,12 +362,12 @@ namespace Barrkel.ScratchPad
 						break;
 
 					case Operation.JumpIfNull:
-						if (Pop(stack).Type == ScratchType.Null)
+						if (Pop(stack).IsFalse)
 							ip = _ops[cp].Arg.Int32Value;
 						break;
 
 					case Operation.JumpIfNotNull:
-						if (Pop(stack).Type != ScratchType.Null)
+						if (Pop(stack).IsTrue)
 							ip = _ops[cp].Arg.Int32Value;
 						break;
 
@@ -375,6 +381,17 @@ namespace Barrkel.ScratchPad
 
 					case Operation.Call:
 						stack.Add(context.Scope.Lookup(_ops[cp].ArgAsString).Invoke(context, PopArgList(stack)));
+						break;
+
+					case Operation.Not:
+						if (Pop(stack).IsFalse)
+							stack.Add(new ScratchValue("true"));
+						else
+							stack.Add(ScratchValue.Null);
+						break;
+
+					case Operation.Dup:
+						stack.Add(Peek(stack));
 						break;
 				}
 			}
@@ -410,10 +427,14 @@ namespace Barrkel.ScratchPad
 			   Grammar:
 				  file ::= { setting } .
 				  setting ::= (<ident> | <string>) '=' ( literal | <ident> ) ;
-				  literal ::= <string> | <number> | block ;
+				  literal ::= <string> | <number> | block | 'nil' ;
 				  block ::= '{' [paramList] exprList '}' ;
 				  paramList ::= '|' [ <ident> { ',' <ident> } ] '|' ;
-				  expr ::= callOrAssign | literal | if ;
+				  expr ::= if | orExpr | return ;
+				  return ::= 'return' [ '(' expr ')' ] ;
+				  orExpr ::= andExpr { '||' andExpr } ;
+				  andExpr ::= factor { '&&' factor } ;
+				  factor ::= [ 'not' ] callOrAssign | literal | '(' expr ')' ;
 				  callOrAssign ::= <ident>
 					( ['(' [ expr { ',' expr } ] ')']
 					| '=' expr
@@ -471,7 +492,7 @@ namespace Barrkel.ScratchPad
 		private static ScratchValue ParseLiteral(ScopeLexer lexer)
 		{
 			ScratchValue result;
-			// literal::= <string> | <number> | block;
+			// literal ::= <string> | <number> | block | 'nil' ;
 			switch (lexer.CurrToken)
 			{
 				case ScopeToken.String:
@@ -481,6 +502,11 @@ namespace Barrkel.ScratchPad
 
 				case ScopeToken.Int32:
 					result = new ScratchValue(lexer.Int32Value);
+					lexer.NextToken();
+					return result;
+
+				case ScopeToken.Nil:
+					result = ScratchValue.Null;
 					lexer.NextToken();
 					return result;
 
@@ -539,66 +565,133 @@ namespace Barrkel.ScratchPad
 
 		private static void CompileExpr(ScratchProgram.Writer w, ScopeLexer lexer)
 		{
-			//  expr ::= callOrAssign | literal | if ;
+			// expr ::= if | orExpr | return ;
 
 			switch (lexer.CurrToken)
 			{
-				case ScopeToken.Ident:
-				{
-					//  callOrAssign ::= <ident>
-					//    ( ['(' { expr } ')']  // invoke binding
-					//    | '=' expr            // assign to binding, wherever found
-					//    | ':=' expr           // assign to local binding
-					//    |                     // fetch value of binding
-					//    ) ;
-
-					string name = lexer.StringValue;
-					lexer.NextToken();
-
-					switch (lexer.CurrToken)
-					{
-						case ScopeToken.Eq:
-							lexer.NextToken();
-							CompileExpr(w, lexer);
-							w.AddOp(ScratchProgram.Operation.Set, new ScratchValue(name));
-							break;
-
-						case ScopeToken.Assign:
-							lexer.NextToken();
-							CompileExpr(w, lexer);
-							w.AddOp(ScratchProgram.Operation.SetLocal, new ScratchValue(name));
-							break;
-
-						case ScopeToken.LParen:
-							lexer.NextToken();
-							int argCount = 0;
-							while (lexer.IsNot(ScopeToken.Eof, ScopeToken.RParen))
-							{
-								++argCount;
-								CompileExpr(w, lexer);
-								if (lexer.CurrToken == ScopeToken.Comma)
-									lexer.NextToken();
-								else
-									break;
-							}
-							lexer.Eat(ScopeToken.RParen);
-							w.AddOp(ScratchProgram.Operation.Push, new ScratchValue(argCount));
-							w.AddOp(ScratchProgram.Operation.Call, new ScratchValue(name));
-							break;
-
-						default:
-							w.AddOp(ScratchProgram.Operation.Get, new ScratchValue(name));
-							break;
-					}
-					break;
-				}
-
 				case ScopeToken.If:
 					CompileIf(w, lexer);
 					break;
 
+				case ScopeToken.Return:
+					// return ::= 'return' [ '(' orExpr ')' ] ;
+					lexer.NextToken();
+					if (lexer.CurrToken == ScopeToken.LParen)
+						CompileOrExpr(w, lexer);
+					else
+						w.AddOp(ScratchProgram.Operation.Push, ScratchValue.Null);
+					w.AddOp(ScratchProgram.Operation.Ret);
+					break;
+
+				default:
+					CompileOrExpr(w, lexer);
+					break;
+			}
+		}
+
+		private static void CompileOrExpr(ScratchProgram.Writer w, ScopeLexer lexer)
+		{
+			// orExpr ::= andExpr { '||' andExpr } ;
+			CompileAndExpr(w, lexer);
+			var ifTrue = w.NewLabel("ifTrue");
+			while (lexer.SkipIf(ScopeToken.Or))
+			{
+				w.AddOp(ScratchProgram.Operation.Dup);
+				// short circuit ||
+				w.AddOpWithLabel(ScratchProgram.Operation.JumpIfNotNull, ifTrue);
+				w.AddOp(ScratchProgram.Operation.Pop);
+				CompileAndExpr(w, lexer);
+			}
+			w.ResolveLabel(ifTrue);
+		}
+
+		private static void CompileAndExpr(ScratchProgram.Writer w, ScopeLexer lexer)
+		{
+			// andExpr ::= factor { '&&' factor } ;
+			CompileFactor(w, lexer);
+			var ifFalse = w.NewLabel("ifFalse");
+			while (lexer.SkipIf(ScopeToken.And))
+			{
+				w.AddOp(ScratchProgram.Operation.Dup);
+				// short circuit &&
+				w.AddOpWithLabel(ScratchProgram.Operation.JumpIfNull, ifFalse);
+				w.AddOp(ScratchProgram.Operation.Pop);
+				CompileFactor(w, lexer);
+			}
+			w.ResolveLabel(ifFalse);
+		}
+
+		private static void CompileFactor(ScratchProgram.Writer w, ScopeLexer lexer)
+		{
+			// factor ::= [ '!' ] callOrAssign | literal | '(' expr ')' ;
+			bool not = lexer.SkipIf(ScopeToken.Not);
+
+			switch (lexer.CurrToken)
+			{
+				case ScopeToken.Ident:
+					CompileCallOrAssign(w, lexer);
+					break;
+
+				case ScopeToken.LParen:
+					lexer.NextToken();
+					CompileExpr(w, lexer);
+					lexer.Eat(ScopeToken.RParen);
+					break;
+
 				default:
 					w.AddOp(ScratchProgram.Operation.Push, ParseLiteral(lexer));
+					break;
+			}
+
+			if (not)
+				w.AddOp(ScratchProgram.Operation.Not);
+		}
+
+		private static void CompileCallOrAssign(ScratchProgram.Writer w, ScopeLexer lexer)
+		{
+			//  callOrAssign ::= <ident>
+			//    ( ['(' { expr } ')']  // invoke binding
+			//    | '=' expr            // assign to binding, wherever found
+			//    | ':=' expr           // assign to local binding
+			//    |                     // fetch value of binding
+			//    ) ;
+
+			string name = lexer.StringValue;
+			lexer.NextToken();
+
+			switch (lexer.CurrToken)
+			{
+				case ScopeToken.Eq:
+					lexer.NextToken();
+					CompileExpr(w, lexer);
+					w.AddOp(ScratchProgram.Operation.Set, new ScratchValue(name));
+					break;
+
+				case ScopeToken.Assign:
+					lexer.NextToken();
+					CompileExpr(w, lexer);
+					w.AddOp(ScratchProgram.Operation.SetLocal, new ScratchValue(name));
+					break;
+
+				case ScopeToken.LParen:
+					lexer.NextToken();
+					int argCount = 0;
+					while (lexer.IsNot(ScopeToken.Eof, ScopeToken.RParen))
+					{
+						++argCount;
+						CompileExpr(w, lexer);
+						if (lexer.CurrToken == ScopeToken.Comma)
+							lexer.NextToken();
+						else
+							break;
+					}
+					lexer.Eat(ScopeToken.RParen);
+					w.AddOp(ScratchProgram.Operation.Push, new ScratchValue(argCount));
+					w.AddOp(ScratchProgram.Operation.Call, new ScratchValue(name));
+					break;
+
+				default:
+					w.AddOp(ScratchProgram.Operation.Get, new ScratchValue(name));
 					break;
 			}
 		}
@@ -670,6 +763,11 @@ namespace Barrkel.ScratchPad
 		Assign,
 		If,
 		Else,
+		And,
+		Or,
+		Not,
+		Nil,
+		Return,
 	}
 
 	class ScopeLexer
@@ -683,6 +781,7 @@ namespace Barrkel.ScratchPad
 		public ScopeToken CurrToken { get; private set; }
 		public string StringValue { get; private set; }
 		public int Int32Value { get; private set; }
+		public int LineNum => _lineNum;
 
 		public ScopeLexer(string source)
 		{
@@ -695,7 +794,19 @@ namespace Barrkel.ScratchPad
 			var result = new Dictionary<string, ScopeToken>();
 			result.Add("if", ScopeToken.If);
 			result.Add("else", ScopeToken.Else);
+			result.Add("nil", ScopeToken.Nil);
+			result.Add("return", ScopeToken.Return);
 			return result;
+		}
+
+		public bool SkipIf(ScopeToken token)
+		{
+			if (CurrToken == token)
+			{
+				NextToken();
+				return true;
+			}
+			return false;
 		}
 
 		public void SkipPastEol()
@@ -783,7 +894,7 @@ namespace Barrkel.ScratchPad
 					++_currPos;
 				else
 					break;
-			return Int32.Parse(Source.Substring(start, _currPos - start));
+			return int.Parse(Source.Substring(start, _currPos - start));
 		}
 
 		private string ScanIdent()
@@ -800,6 +911,16 @@ namespace Barrkel.ScratchPad
 					break;
 			}
 			return Source.Substring(start, _currPos - start);
+		}
+
+		private bool SkipIfNextChar(char ch)
+		{
+			if (_currPos < Source.Length && Source[_currPos] == ch)
+			{
+				++_currPos;
+				return true;
+			}
+			return false;
 		}
 
 		private ScopeToken Scan()
@@ -820,11 +941,9 @@ namespace Barrkel.ScratchPad
 				switch (ch)
 				{
 					case '/':
-						if (_currPos < Source.Length && Source[_currPos] == '/')
-						{
-							++_currPos;
-							SkipPastEol();
-						}
+						if (!SkipIfNextChar('/'))
+							break;
+						SkipPastEol();
 						continue;
 
 					case '#':
@@ -853,16 +972,24 @@ namespace Barrkel.ScratchPad
 					return ScopeToken.Comma;
 				case '=':
 					return ScopeToken.Eq;
+
+				case '!':
+					return ScopeToken.Not;
+
 				case '|':
+					if (SkipIfNextChar('|'))
+						return ScopeToken.Or;
 					return ScopeToken.Bar;
 
 				case ':':
-					if (_currPos < Source.Length && Source[_currPos] == '=')
-					{
-						++_currPos;
+					if (SkipIfNextChar('='))
 						return ScopeToken.Assign;
-					}
-					throw new ArgumentException("Unexpected ':', did you mean ':='");
+					throw Error("Unexpected ':', did you mean ':='");
+
+				case '&':
+					if (SkipIfNextChar('&'))
+						return ScopeToken.And;
+					throw Error("Unexpected '&', did you mean '&&'");
 
 				case '\'':
 				case '"':
