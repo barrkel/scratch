@@ -475,7 +475,8 @@ namespace Barrkel.ScratchPad
 				  literal ::= <string> | <number> | block | 'nil' ;
 				  block ::= '{' [paramList] exprList '}' ;
 				  paramList ::= '|' [ <ident> { ',' <ident> } ] '|' ;
-				  expr ::= if | orExpr | return ;
+				  expr ::= if | orExpr | return | while ;
+				  while ::= 'while' orExpr '{' exprList '}' ;
 				  return ::= 'return' [ '(' expr ')' ] ;
 				  orExpr ::= andExpr { '||' andExpr } ;
 				  andExpr ::= factor { '&&' factor } ;
@@ -488,7 +489,7 @@ namespace Barrkel.ScratchPad
 					) ;
 				  exprList = { expr } ;
 				  if ::= 
-					'if' expr '{' exprList '}'
+					'if' orExpr '{' exprList '}'
 					[ 'else' (if | '{' exprList '}') ]
 					;
 			 */
@@ -610,12 +611,16 @@ namespace Barrkel.ScratchPad
 
 		private static void CompileExpr(ScratchProgram.Writer w, ScopeLexer lexer)
 		{
-			// expr ::= if | orExpr | return ;
+			// expr ::= if | orExpr | return | while ;
 
 			switch (lexer.CurrToken)
 			{
 				case ScopeToken.If:
 					CompileIf(w, lexer);
+					break;
+
+				case ScopeToken.While:
+					CompileWhile(w, lexer);
 					break;
 
 				case ScopeToken.Return:
@@ -741,18 +746,37 @@ namespace Barrkel.ScratchPad
 			}
 		}
 
+		private static void CompileWhile(ScratchProgram.Writer w, ScopeLexer lexer)
+		{
+			// while ::= 'while' orExpr '{' exprList '}';
+			lexer.NextToken();
+			var topOfLoop = w.NewLabel("top");
+			var pastLoop = w.NewLabel("pastLoop");
+			// this is 'result' of loop if we never execute body
+			w.AddOp(ScratchProgram.Operation.Push, ScratchValue.Null);
+			w.ResolveLabel(topOfLoop);
+			CompileOrExpr(w, lexer);
+			w.AddOpWithLabel(ScratchProgram.Operation.JumpIfNull, pastLoop);
+			// pop off either the null above, or the result of previous iteration
+			w.AddOp(ScratchProgram.Operation.Pop);
+			lexer.Eat(ScopeToken.LBrace);
+			CompileExprList(w, lexer);
+			w.ResolveLabel(pastLoop);
+			// top of stack is now either null or last expr evaluated in body
+		}
+
 		private static void CompileIf(ScratchProgram.Writer w, ScopeLexer lexer)
 		{
 			/*
 			  if ::= 
-				'if' expr '{' exprList '}'
+				'if' orExpr '{' exprList '}'
 				[ 'else' (if | '{' exprList '}') ]
 				;
 			 */
 			var elseCase = w.NewLabel("else");
 			var afterIf = w.NewLabel("afterIf");
 			lexer.NextToken();
-			CompileExpr(w, lexer);
+			CompileOrExpr(w, lexer);
 			lexer.Eat(ScopeToken.LBrace);
 			w.AddOpWithLabel(ScratchProgram.Operation.JumpIfNull, elseCase);
 			CompileExprList(w, lexer);
@@ -813,6 +837,7 @@ namespace Barrkel.ScratchPad
 		Not,
 		Nil,
 		Return,
+		While,
 	}
 
 	class ScopeLexer
@@ -838,6 +863,7 @@ namespace Barrkel.ScratchPad
 		{
 			var result = new Dictionary<string, ScopeToken>();
 			result.Add("if", ScopeToken.If);
+			result.Add("while", ScopeToken.While);
 			result.Add("else", ScopeToken.Else);
 			result.Add("nil", ScopeToken.Nil);
 			result.Add("return", ScopeToken.Return);
