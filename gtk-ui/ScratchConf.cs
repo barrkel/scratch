@@ -121,6 +121,8 @@ namespace Barrkel.ScratchPad
 	public class ScratchValue
 	{
 		public static readonly ScratchValue Null = new ScratchValue(null, ScratchType.Null);
+		public static readonly ScratchValue True = new ScratchValue("true");
+		public static readonly ScratchValue False = Null;
 		public static readonly IList<ScratchValue> EmptyList = new ScratchValue[0];
 
 		private Object _value;
@@ -155,12 +157,20 @@ namespace Barrkel.ScratchPad
 			Type = ScratchType.ScratchFunction;
 		}
 
-		public static ScratchValue FromObject(object value)
+		public static ScratchValue From(bool value)
+		{
+			return value ? True : False;
+		}
+
+		public static ScratchValue From(object value)
 		{
 			switch (value)
 			{
 				case null:
 					return Null;
+
+				case bool boolValue:
+					return From(boolValue);
 
 				case ScratchValue scratchValue:
 					return scratchValue;
@@ -199,7 +209,7 @@ namespace Barrkel.ScratchPad
 			switch (Type)
 			{
 				case ScratchType.Action:
-					return ScratchValue.FromObject(((ScratchAction)_value)(context, args));
+					return ScratchValue.From(((ScratchAction)_value)(context, args));
 
 				case ScratchType.ScratchFunction:
 					return ((ScratchFunction)_value).Invoke(context, args);
@@ -218,6 +228,14 @@ namespace Barrkel.ScratchPad
 		public override string ToString()
 		{
 			return $"SV({_value})";
+		}
+
+		public static IList<ScratchValue> List(params object[] values)
+		{
+			ScratchValue[] result = new ScratchValue[values.Length];
+			for (int i = 0; i < values.Length; ++i)
+				result[i] = From(values[i]);
+			return result;
 		}
 	}
 
@@ -454,9 +472,9 @@ namespace Barrkel.ScratchPad
 
 					case Operation.Not:
 						if (Pop(stack).IsFalse)
-							stack.Add(new ScratchValue("true"));
+							stack.Add(ScratchValue.True);
 						else
-							stack.Add(ScratchValue.Null);
+							stack.Add(ScratchValue.False);
 						break;
 
 					case Operation.Dup:
@@ -639,7 +657,6 @@ namespace Barrkel.ScratchPad
 		private static void CompileExpr(ScratchProgram.Writer w, ScopeLexer lexer)
 		{
 			// expr ::= if | orExpr | return | while | 'break' | 'continue' ;
-
 			switch (lexer.CurrToken)
 			{
 				case ScopeToken.Break:
@@ -805,7 +822,10 @@ namespace Barrkel.ScratchPad
 			// pop off either the null above, or the result of previous iteration
 			w.AddOp(ScratchProgram.Operation.Pop);
 			lexer.Eat(ScopeToken.LBrace);
+			w.EnterLoop(pastLoop, topOfLoop);
 			CompileExprList(w, lexer);
+			w.ExitLoop();
+			w.AddOpWithLabel(ScratchProgram.Operation.Jump, topOfLoop);
 			w.ResolveLabel(pastLoop);
 			// top of stack is now either null or last expr evaluated in body
 		}

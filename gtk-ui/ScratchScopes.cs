@@ -76,6 +76,20 @@ namespace Barrkel.ScratchPad
 			return new ScratchValue((context, _) =>
 					context.Scope.Lookup(name).Invoke(context, ScratchValue.EmptyList));
 		}
+
+		protected void ValidateLength(string method, IList<ScratchValue> args, int length)
+		{
+			if (args.Count != length)
+				throw new ArgumentException($"Expected {length} arguments to {method} but got {args.Count}");
+		}
+
+		protected void Validate(string method, IList<ScratchValue> args, params ScratchType[] paramTypes)
+        {
+			ValidateLength(method, args, paramTypes.Length);
+			for (int i = 0; i < args.Count; ++i)
+				if (args[i].Type != paramTypes[i])
+					throw new ArgumentException($"Expected arg {i + 1} to {method} to be {paramTypes[i]} but got {args[i].Type}");
+		}
 	}
 
 	public class ScratchScope : IScratchLibrary

@@ -7,8 +7,6 @@ using System.Text.RegularExpressions;
 
 namespace Barrkel.ScratchPad
 {
-
-
 	public class LegacyLibrary : NativeLibrary
 	{
 		public static readonly LegacyLibrary Instance = new LegacyLibrary();
@@ -62,80 +60,6 @@ namespace Barrkel.ScratchPad
 					context.View.InsertText(ex.Message);
 				}
 			}
-		}
-
-		[Action("open")]
-		public void DoOpen(ExecutionContext context, IList<ScratchValue> args)
-		{
-			if (args.Count != 1)
-				throw new ArgumentException($"Expected exactly one argument to open, got {args.Count}");
-			Process.Start(args[0].StringValue);
-		}
-
-		[Action("exec")]
-		public void DoExec(ExecutionContext context, IList<ScratchValue> args)
-		{
-			// TODO: upgrade to .net Core and use ArgumentList
-			ProcessStartInfo info = new ProcessStartInfo(args[0].StringValue,
-				string.Join(" ", args.Skip(1).Select(x => x.StringValue)))
-			{
-				UseShellExecute = false
-			};
-			Process.Start(info);
-		}
-
-		[Action("gsub")]
-		public ScratchValue DoGsub(ExecutionContext context, IList<ScratchValue> args)
-		{
-			// args: (text-to-scan, regex, replacement)
-			Regex re = new Regex(args[1].StringValue,
-				RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled,
-				TimeSpan.FromSeconds(1));
-			return new ScratchValue(re.Replace(args[0].StringValue, args[2].StringValue));
-		}
-
-		[Action("match-re")]
-		public ScratchValue DoMatchRe(ExecutionContext context, IList<ScratchValue> args)
-		{
-			// args: (text-to-scan, regex)
-			// return text of matching regex if match, null otherwise
-			Regex re = new Regex(args[1].StringValue,
-				RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled,
-				TimeSpan.FromSeconds(1));
-			Match m = re.Match(args[0].StringValue);
-			if (m.Success)
-				return new ScratchValue(m.Value);
-			return ScratchValue.Null;
-		}
-
-		[Action("concat")]
-		public ScratchValue DoConcat(ExecutionContext context, IList<ScratchValue> args)
-		{
-			StringBuilder result = new StringBuilder();
-			foreach (var sv in args)
-			{
-				switch (sv.Type)
-				{
-					case ScratchType.Int32:
-						result.Append(sv.Int32Value);
-						break;
-
-					case ScratchType.String:
-						result.Append(sv.StringValue);
-						break;
-
-					default:
-						break;
-				}
-			}
-			return new ScratchValue(result.ToString());
-		}
-
-		[Action("format")]
-		public ScratchValue DoFormat(ExecutionContext context, IList<ScratchValue> args)
-		{
-			return new ScratchValue(string.Format(args[0].StringValue, 
-				args.Skip(1).Select(x => x.ObjectValue).ToArray()));
 		}
 
 		[Action("get-cursor-text-re")]
@@ -513,7 +437,7 @@ namespace Barrkel.ScratchPad
 		[Action("navigate-todo")]
 		public void NavigateTodo(ExecutionContext context, IList<ScratchValue> args)
 		{
-			NavigateSigil(context, "=>");
+			NavigateSigil(context, ScratchValue.List("=>"));
 		}
 
 		[Action("add-new-page")]
@@ -787,8 +711,11 @@ namespace Barrkel.ScratchPad
 			return book.Pages[index];
 		}
 
-		private void NavigateSigil(ExecutionContext context, string sigil)
+		[Action("navigate-sigil")]
+		private void NavigateSigil(ExecutionContext context, IList<ScratchValue> args)
 		{
+			Validate("navigate-sigil", args, ScratchType.String);
+			string sigil = args[0].StringValue;
 			context.View.EnsureSaved();
 			if (context.View.RunSearch(text => TrySearch(context.View.Book, $"^\\s*{Regex.Escape(sigil)}.*{text}",
 				SearchOptions.TitleLinkToFirstResult).Take(50), out var triple))
