@@ -162,6 +162,16 @@ namespace Barrkel.ScratchPad
 			return value ? True : False;
 		}
 
+		public static ScratchValue From(string value)
+		{
+			return new ScratchValue(value);
+		}
+
+		public static ScratchValue From(int value)
+		{
+			return new ScratchValue(value);
+		}
+
 		public static ScratchValue From(object value)
 		{
 			switch (value)
@@ -242,6 +252,8 @@ namespace Barrkel.ScratchPad
 	// Basic stack machine straight from parser.
 	public class ScratchProgram
 	{
+		public static readonly bool DebugStack = true;
+
 		public enum Operation
 		{
 			// arg is ScratchValue to push
@@ -369,6 +381,7 @@ namespace Barrkel.ScratchPad
 
 			public ScratchProgram ToProgram()
 			{
+				Console.WriteLine(this);
 				foreach (int fixup in _fixups)
 				{
 					string label = _ops[fixup].ArgAsString;
@@ -380,6 +393,25 @@ namespace Barrkel.ScratchPad
 				ScratchProgram result = new ScratchProgram(_ops);
 				_ops = null;
 				return result;
+			}
+
+			public override string ToString()
+			{
+				StringBuilder result = new StringBuilder();
+				Dictionary<int, List<string>> labels = new Dictionary<int, List<string>>();
+				foreach (var entry in _labels)
+					if (labels.TryGetValue(entry.Value, out var names))
+						names.Add(entry.Key);
+					else
+						labels.Add(entry.Value, new List<string>() { entry.Key });
+				for (int i = 0; i < _ops.Count; ++i)
+				{
+					if (labels.TryGetValue(i, out var names))
+						foreach (string name in names)
+							result.AppendLine($"{name}:");
+					result.AppendLine($"  {_ops[i]}");
+				}
+				return result.ToString();
 			}
 		}
 
@@ -426,6 +458,11 @@ namespace Barrkel.ScratchPad
 			while (ip < _ops.Count)
 			{
 				int cp = ip++;
+				if (DebugStack)
+				{
+					Console.WriteLine("  stack: {0}", string.Join(", ", stack));
+					Console.WriteLine(_ops[cp]);
+				}
 				switch (_ops[cp].Operation)
 				{
 					case Operation.Push:
@@ -641,6 +678,7 @@ namespace Barrkel.ScratchPad
 		private static void CompileExprList(ScratchProgram.Writer w, ScopeLexer lexer, 
 			ScopeToken stopToken = ScopeToken.RBrace)
 		{
+			// Invariant: we enter without a value on the stack, and we always leave with one.
 			bool prevRetValOnStack = false;
 			while (lexer.IsNot(ScopeToken.Eof, stopToken))
 			{
@@ -661,18 +699,24 @@ namespace Barrkel.ScratchPad
 			{
 				case ScopeToken.Break:
 				{
+					lexer.NextToken();
 					var loop = w.CurrentLoop;
 					if (loop == null)
 						throw lexer.Error("break used outside loop");
+					// TODO: consider taking arg like return, result of broken loop
+					w.AddOp(ScratchProgram.Operation.Push, ScratchValue.Null);
 					w.AddOpWithLabel(ScratchProgram.Operation.Jump, loop.Break);
 					break;
 				}
 
 				case ScopeToken.Continue:
 				{
+					lexer.NextToken();
 					var loop = w.CurrentLoop;
 					if (loop == null)
 						throw lexer.Error("continue used outside loop");
+					// TODO: consider taking arg like return, result of continued loop that fails predicate
+					w.AddOp(ScratchProgram.Operation.Push, ScratchValue.Null);
 					w.AddOpWithLabel(ScratchProgram.Operation.Jump, loop.Continue);
 					break;
 				}
@@ -706,31 +750,38 @@ namespace Barrkel.ScratchPad
 			// orExpr ::= andExpr { '||' andExpr } ;
 			CompileAndExpr(w, lexer);
 			var ifTrue = w.NewLabel("ifTrue");
+			bool needLabel = false;
 			while (lexer.SkipIf(ScopeToken.Or))
 			{
 				w.AddOp(ScratchProgram.Operation.Dup);
 				// short circuit ||
 				w.AddOpWithLabel(ScratchProgram.Operation.JumpIfNotNull, ifTrue);
+				needLabel = true;
 				w.AddOp(ScratchProgram.Operation.Pop);
 				CompileAndExpr(w, lexer);
 			}
-			w.ResolveLabel(ifTrue);
+			if (needLabel)
+				w.ResolveLabel(ifTrue);
 		}
 
 		private static void CompileAndExpr(ScratchProgram.Writer w, ScopeLexer lexer)
 		{
 			// andExpr ::= factor { '&&' factor } ;
 			CompileFactor(w, lexer);
+			// These labels can get really verbose when dumping opcodes
 			var ifFalse = w.NewLabel("ifFalse");
+			bool needLabel = false;
 			while (lexer.SkipIf(ScopeToken.And))
 			{
 				w.AddOp(ScratchProgram.Operation.Dup);
 				// short circuit &&
 				w.AddOpWithLabel(ScratchProgram.Operation.JumpIfNull, ifFalse);
+				needLabel = true;
 				w.AddOp(ScratchProgram.Operation.Pop);
 				CompileFactor(w, lexer);
 			}
-			w.ResolveLabel(ifFalse);
+			if (needLabel)
+				w.ResolveLabel(ifFalse);
 		}
 
 		private static void CompileFactor(ScratchProgram.Writer w, ScopeLexer lexer)
@@ -816,6 +867,7 @@ namespace Barrkel.ScratchPad
 			var pastLoop = w.NewLabel("pastLoop");
 			// this is 'result' of loop if we never execute body
 			w.AddOp(ScratchProgram.Operation.Push, ScratchValue.Null);
+			// we have at least a null on the stack
 			w.ResolveLabel(topOfLoop);
 			CompileOrExpr(w, lexer);
 			w.AddOpWithLabel(ScratchProgram.Operation.JumpIfNull, pastLoop);
@@ -823,7 +875,9 @@ namespace Barrkel.ScratchPad
 			w.AddOp(ScratchProgram.Operation.Pop);
 			lexer.Eat(ScopeToken.LBrace);
 			w.EnterLoop(pastLoop, topOfLoop);
+			// We have nothing on the stack
 			CompileExprList(w, lexer);
+			// we have at least a null on the stack
 			w.ExitLoop();
 			w.AddOpWithLabel(ScratchProgram.Operation.Jump, topOfLoop);
 			w.ResolveLabel(pastLoop);

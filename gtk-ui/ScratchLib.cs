@@ -15,30 +15,11 @@ namespace Barrkel.ScratchPad
         {
         }
 
-        [Action("length")]
-        public ScratchValue DoLength(ExecutionContext context, IList<ScratchValue> args)
-        {
-            Validate("length", args, ScratchType.String);
-            return new ScratchValue(args[0].StringValue.Length);
-        }
+        /****************************************************************************************************/
+        // Operators
+        /****************************************************************************************************/
 
-        [Action("to-int")]
-        public ScratchValue DoToInt(ExecutionContext context, IList<ScratchValue> args)
-        {
-            Validate("to-int", args, ScratchType.String);
-            if (int.TryParse(args[0].StringValue, out var x))
-                return new ScratchValue(x);
-            return ScratchValue.Null;
-        }
-
-        [Action("to-str")]
-        public ScratchValue DoToStr(ExecutionContext context, IList<ScratchValue> args)
-        {
-            Validate("to-str", args, ScratchType.Int32);
-            return new ScratchValue(args[0].Int32Value.ToString());
-        }
-
-        // let's see how long we can get away without arithmetic in the language
+        // lets see how long we can get away without arithmetic in the language
 
         [Action("add")]
         public ScratchValue DoAdd(ExecutionContext context, IList<ScratchValue> args)
@@ -141,24 +122,31 @@ namespace Barrkel.ScratchPad
             }
         }
 
-        [Action("open")]
-        public void DoOpen(ExecutionContext context, IList<ScratchValue> args)
+        /****************************************************************************************************/
+        // String operations
+        /****************************************************************************************************/
+
+        [Action("length")]
+        public ScratchValue DoLength(ExecutionContext context, IList<ScratchValue> args)
         {
-            if (args.Count != 1)
-                throw new ArgumentException($"Expected exactly one argument to open, got {args.Count}");
-            Process.Start(args[0].StringValue);
+            Validate("length", args, ScratchType.String);
+            return new ScratchValue(args[0].StringValue.Length);
         }
 
-        [Action("exec")]
-        public void DoExec(ExecutionContext context, IList<ScratchValue> args)
+        [Action("to-int")]
+        public ScratchValue DoToInt(ExecutionContext context, IList<ScratchValue> args)
         {
-            // TODO: upgrade to .net Core and use ArgumentList
-            ProcessStartInfo info = new ProcessStartInfo(args[0].StringValue,
-                string.Join(" ", args.Skip(1).Select(x => x.StringValue)))
-            {
-                UseShellExecute = false
-            };
-            Process.Start(info);
+            Validate("to-int", args, ScratchType.String);
+            if (int.TryParse(args[0].StringValue, out var x))
+                return new ScratchValue(x);
+            return ScratchValue.Null;
+        }
+
+        [Action("to-str")]
+        public ScratchValue DoToStr(ExecutionContext context, IList<ScratchValue> args)
+        {
+            Validate("to-str", args, ScratchType.Int32);
+            return new ScratchValue(args[0].Int32Value.ToString());
         }
 
         [Action("gsub")]
@@ -215,6 +203,174 @@ namespace Barrkel.ScratchPad
                 args.Skip(1).Select(x => x.ObjectValue).ToArray()));
         }
 
+        [Action("get-string-from-to")]
+        public ScratchValue GetStringFromTo(ExecutionContext context, IList<ScratchValue> args)
+        {
+            Validate("get-string-from-to", args, ScratchType.String, ScratchType.Int32, ScratchType.Int32);
+            return ScratchValue.From(args[0].StringValue.Substring(args[1].Int32Value, args[1].Int32Value + args[2].Int32Value));
+        }
 
+        [Action("char-at")]
+        public ScratchValue GetCharAt(ExecutionContext context, IList<ScratchValue> args)
+        {
+            Validate("char-at", args, ScratchType.String, ScratchType.Int32);
+            int pos = args[1].Int32Value;
+            string s = args[0].StringValue;
+            if (pos < 0 || pos >= s.Length)
+                return ScratchValue.Null;
+            return ScratchValue.From(s.Substring(pos, 1));
+        }
+
+        /****************************************************************************************************/
+        // OS interaction
+        /****************************************************************************************************/
+
+        [Action("open")]
+        public void DoOpen(ExecutionContext context, IList<ScratchValue> args)
+        {
+            if (args.Count != 1)
+                throw new ArgumentException($"Expected exactly one argument to open, got {args.Count}");
+            Process.Start(args[0].StringValue);
+        }
+
+        [Action("exec")]
+        public void DoExec(ExecutionContext context, IList<ScratchValue> args)
+        {
+            // TODO: upgrade to .net Core and use ArgumentList
+            ProcessStartInfo info = new ProcessStartInfo(args[0].StringValue,
+                string.Join(" ", args.Skip(1).Select(x => x.StringValue)))
+            {
+                UseShellExecute = false
+            };
+            Process.Start(info);
+        }
+
+        /****************************************************************************************************/
+        // View interaction
+        /****************************************************************************************************/
+
+        [Action("get-view-text")]
+        public ScratchValue GetViewText(ExecutionContext context, IList<ScratchValue> args)
+        {
+            Validate("get-view-text", args);
+            return ScratchValue.From(context.View.CurrentText);
+        }
+
+        [Action("get-view-pos")]
+        public ScratchValue GetViewPos(ExecutionContext context, IList<ScratchValue> args)
+        {
+            Validate("get-view-pos", args);
+            return ScratchValue.From(context.View.CurrentPosition);
+        }
+
+        [Action("get-line-start")]
+        public ScratchValue DoGetLineStart(ExecutionContext context, IList<ScratchValue> args)
+        {
+            Validate("get-line-start", args, ScratchType.String, ScratchType.Int32);
+            return ScratchValue.From(GetLineStart(args[0].StringValue, args[1].Int32Value));
+        }
+
+        [Action("get-line-end")]
+        public ScratchValue DoGetLineEnd(ExecutionContext context, IList<ScratchValue> args)
+        {
+            Validate("get-line-end", args, ScratchType.String, ScratchType.Int32);
+            return ScratchValue.From(GetLineEnd(args[0].StringValue, args[1].Int32Value));
+        }
+
+        [Action("set-view-pos")]
+        public void SetViewPos(ExecutionContext context, IList<ScratchValue> args)
+        {
+            Validate("set-view-pos", args, ScratchType.Int32);
+            int pos = args[0].Int32Value;
+            context.View.Selection = (pos, pos);
+        }
+
+        [Action("set-view-selection")]
+        public void SetViewSelection(ExecutionContext context, IList<ScratchValue> args)
+        {
+            Validate("get-view-selection", args, ScratchType.Int32, ScratchType.Int32);
+            context.View.Selection = (args[0].Int32Value, args[1].Int32Value);
+        }
+
+        [Action("get-view-selected-text")]
+        public ScratchValue GetViewSelectedText(ExecutionContext context, IList<ScratchValue> args)
+        {
+            Validate("get-view-selected-text", args);
+            return ScratchValue.From(context.View.SelectedText);
+        }
+
+        [Action("set-view-selected-text")]
+        public void SetViewSelectedText(ExecutionContext context, IList<ScratchValue> args)
+        {
+            Validate("set-view-selected-text", args, ScratchType.String);
+            context.View.SelectedText = args[0].StringValue;
+        }
+
+        // Gets the position of the character which starts the line.
+        private int GetLineStart(string text, int position)
+        {
+            if (position == 0)
+                return 0;
+            --position;
+            while (position > 0)
+            {
+                switch (text[position])
+                {
+                    case '\r':
+                    case '\n':
+                        return position + 1;
+
+                    default:
+                        --position;
+                        break;
+                }
+            }
+            return position;
+        }
+
+        // Gets the position of the character which ends the line.
+        private int GetLineEnd(string text, int position)
+        {
+            while (position < text.Length)
+            {
+                switch (text[position])
+                {
+                    case '\r':
+                    case '\n':
+                        return position;
+
+                    default:
+                        ++position;
+                        break;
+                }
+            }
+            return position;
+        }
+
+        /****************************************************************************************************/
+        // Obsolete actions
+        /****************************************************************************************************/
+
+        // these actions can be completely replaced by script
+        // we need to look at shipping a standard library script
+
+        [Action("goto-eol")]
+        public void GotoEol(ExecutionContext context, IList<ScratchValue> args)
+        {
+            string text = context.View.CurrentText;
+            int pos = context.View.CurrentPosition;
+            int eol = GetLineEnd(text, pos);
+            context.View.Selection = (eol, eol);
+        }
+
+        [Action("goto-sol")]
+        public void GotoSol(ExecutionContext context, IList<ScratchValue> args)
+        {
+            // NOTE: does not extend selection
+            string text = context.View.CurrentText;
+            int pos = context.View.CurrentPosition;
+            int sol = GetLineStart(text, pos);
+            context.View.Selection = (sol, sol);
+        }
     }
 }

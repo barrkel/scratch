@@ -572,25 +572,6 @@ namespace Barrkel.ScratchPad
 			}
 		}
 
-		[Action("goto-sol")]
-		public void GotoSol(ExecutionContext context, IList<ScratchValue> args)
-		{
-			// NOTE: does not extend selection
-			string text = context.View.CurrentText;
-			int pos = context.View.CurrentPosition;
-			int sol = GetLineStart(text, pos);
-			context.View.Selection = (sol, sol);
-		}
-
-		[Action("goto-eol")]
-		public void GotoEol(ExecutionContext context, IList<ScratchValue> args)
-		{
-			string text = context.View.CurrentText;
-			int pos = context.View.CurrentPosition;
-			int eol = GetLineEnd(text, pos);
-			context.View.Selection = (eol, eol);
-		}
-
 		// starting at position-1, keep going backwards until test fails
 		private string GetStringBackwards(string text, int position, Predicate<char> test)
 		{
@@ -712,7 +693,7 @@ namespace Barrkel.ScratchPad
 		}
 
 		[Action("navigate-sigil")]
-		private void NavigateSigil(ExecutionContext context, IList<ScratchValue> args)
+		public void NavigateSigil(ExecutionContext context, IList<ScratchValue> args)
 		{
 			Validate("navigate-sigil", args, ScratchType.String);
 			string sigil = args[0].StringValue;
