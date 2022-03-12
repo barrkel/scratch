@@ -306,6 +306,13 @@ namespace Barrkel.ScratchPad
             context.View.SelectedText = args[0].StringValue;
         }
 
+        [Action("scroll-pos-into-view")]
+        public void ScrollPosIntoView(ExecutionContext context, IList<ScratchValue> args)
+        {
+            Validate("scroll-pos-into-view", args, ScratchType.Int32);
+            context.View.ScrollIntoView(args[0].Int32Value);
+        }
+
         // Gets the position of the character which starts the line.
         private int GetLineStart(string text, int position)
         {

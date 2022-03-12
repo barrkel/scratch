@@ -100,7 +100,6 @@ namespace Barrkel.ScratchPad
 					$"Parameter count mismatch: expected {Parameters.Count}, got {args.Count}");
 			for (int i = 0; i < Parameters.Count; ++i)
 			{
-				Console.WriteLine($"Assigning {args[i]} to {Parameters[i]}");
 				child.Scope.AssignLocal(Parameters[i], args[i]);
 			}
 			return Program.Run(child);
@@ -227,7 +226,6 @@ namespace Barrkel.ScratchPad
 				// invoking a string binding invokes whatever the string is itself bound to, recursively
 				// this lets us use strings as function pointers, as long as we don't mind naming our functions
 				case ScratchType.String:
-					Console.WriteLine($"Invoking {StringValue}");
 					return context.Scope.Lookup(StringValue).Invoke(context, args);
 
 				default:
@@ -252,7 +250,7 @@ namespace Barrkel.ScratchPad
 	// Basic stack machine straight from parser.
 	public class ScratchProgram
 	{
-		public static readonly bool DebugStack = true;
+		public static readonly bool DebugStack = false;
 
 		public enum Operation
 		{
@@ -381,7 +379,6 @@ namespace Barrkel.ScratchPad
 
 			public ScratchProgram ToProgram()
 			{
-				Console.WriteLine(this);
 				foreach (int fixup in _fixups)
 				{
 					string label = _ops[fixup].ArgAsString;
