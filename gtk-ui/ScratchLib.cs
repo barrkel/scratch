@@ -451,6 +451,21 @@ namespace Barrkel.ScratchPad
             return position;
         }
 
+        [VariadicAction("get-input")]
+        public ScratchValue GetInput(ExecutionContext context, IList<ScratchValue> args)
+        {
+            ScratchScope settings = context.Scope;
+            if (args.Count == 1)
+            {
+                var childContext = context.CreateChild();
+                args[0].FunctionValue.Program.Run(childContext);
+                settings = childContext.Scope;
+            }
+            if (context.View.GetInput(settings, out string result))
+                return ScratchValue.From(result);
+            return ScratchValue.Null;
+        }
+
         /****************************************************************************************************/
         // Obsolete actions
         /****************************************************************************************************/

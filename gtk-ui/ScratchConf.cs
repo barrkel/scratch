@@ -204,6 +204,7 @@ namespace Barrkel.ScratchPad
 		public ScratchType Type { get; }
 		public String StringValue => (string)_value;
 		public int Int32Value => (int)_value;
+		public ScratchFunction FunctionValue => (ScratchFunction)_value;
 		public bool IsTrue => Type != ScratchType.Null;
 		public bool IsFalse => Type == ScratchType.Null;
 		public object ObjectValue => _value;

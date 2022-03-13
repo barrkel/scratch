@@ -365,7 +365,6 @@ namespace Barrkel.GtkScratchPad
 		{
 			if (_deferred.Count == 0)
 				return false;
-
 			System.Action defer = _deferred[_deferred.Count - 1];
 			_deferred.RemoveAt(_deferred.Count - 1);
 			defer();
@@ -664,6 +663,11 @@ namespace Barrkel.GtkScratchPad
 		public bool RunSearch<T>(ScratchPad.SearchFunc<T> searchFunc, out T result)
 		{
 			return SearchWindow.RunSearch(AppWindow, searchFunc.Invoke, AppSettings, out result);
+		}
+
+		public bool GetInput(ScratchScope settings, out string value)
+		{
+			return InputModalWindow.GetInput(AppWindow, settings, out value);
 		}
 
 		string IScratchBookView.SelectedText

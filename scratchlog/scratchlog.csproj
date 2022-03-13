@@ -120,6 +120,21 @@
     <Compile Include="..\gtk-ui\Scratch.cs">
       <Link>Scratch.cs</Link>
     </Compile>
+    <Compile Include="..\gtk-ui\ScratchConf.cs">
+      <Link>ScratchConf.cs</Link>
+    </Compile>
+    <Compile Include="..\gtk-ui\ScratchController.cs">
+      <Link>ScratchController.cs</Link>
+    </Compile>
+    <Compile Include="..\gtk-ui\ScratchLegacy.cs">
+      <Link>ScratchLegacy.cs</Link>
+    </Compile>
+    <Compile Include="..\gtk-ui\ScratchLib.cs">
+      <Link>ScratchLib.cs</Link>
+    </Compile>
+    <Compile Include="..\gtk-ui\ScratchScopes.cs">
+      <Link>ScratchScopes.cs</Link>
+    </Compile>
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

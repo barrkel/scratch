@@ -355,6 +355,9 @@ namespace Barrkel.ScratchPad
 		// Returns false if Cancel clicked or search otherwise cancelled (Esc).
 		bool RunSearch<T>(SearchFunc<T> searchFunc, out T result);
 
+		// Show an input dialog.
+		bool GetInput(ScratchScope settings, out string value);
+
 		// Before invoking cross-page navigation, call this.
 		void EnsureSaved();
 		// Jump to page by index in Book.

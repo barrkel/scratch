@@ -68,6 +68,68 @@ namespace Barrkel.GtkScratchPad
 		}
 	}
 
+	public class InputModalWindow : ModalWindow
+	{
+		TextView _textView;
+
+		public InputModalWindow(ScratchScope settings) : base("Input")
+		{
+			Scope = settings;
+			InitComponent();
+		}
+
+		public ScratchScope Scope { get; }
+
+		private void InitComponent()
+		{
+			Resize(500, 100);
+			_textView = new TextView();
+
+			Gdk.Color lightBlue = new Gdk.Color(207, 207, 239);
+
+			var textFont = Pango.FontDescription.FromString(Scope.GetOrDefault("text-font", "Courier New"));
+
+			_textView.ModifyBase(StateType.Normal, lightBlue);
+			// _textView.Buffer.Changed += (s, e) => { UpdateSearchBox(); };
+			// _textView.KeyPressEvent += _textView_KeyPressEvent;
+			_textView.ModifyFont(textFont);
+			string initText = Scope.GetOrDefault("init-text", "");
+			if (!string.IsNullOrEmpty(initText))
+			{
+				_textView.Buffer.Text = initText;
+				TextIter start = _textView.Buffer.GetIterAtOffset(0);
+				TextIter end = _textView.Buffer.GetIterAtOffset(initText.Length);
+				_textView.Buffer.SelectRange(start, end);
+			}
+
+
+			Add(_textView);
+			BorderWidth = 5;
+		}
+
+		public static bool GetInput(Window parent, ScratchScope settings, out string result)
+		{
+			using (InputModalWindow window = new InputModalWindow(settings))
+			{
+				switch (window.ShowModal(parent))
+				{
+					case ModalResult.OK:
+						result = window._textView.Buffer.Text;
+						return true;
+
+					default:
+						result = null;
+						return false;
+				}
+			}
+		}
+
+		private void _textView_KeyPressEvent(object o, KeyPressEventArgs args)
+		{
+			// throw new NotImplementedException();
+		}
+	}
+
 	delegate IEnumerable<(string, object)> SearchFunc(string text);
 
 	public class SearchWindow : ModalWindow
@@ -137,9 +199,11 @@ namespace Barrkel.GtkScratchPad
 			_searchResultsStore = new ListStore(typeof(TitleSearchResult));
 			
 			_searchResultsView = new TreeView(_searchResultsStore);
-			_valueColumn = new TreeViewColumn();
-			_valueColumn.Title = "Value";
 			var valueRenderer = new CellRendererText();
+			_valueColumn = new TreeViewColumn
+			{
+				Title = "Value"
+			};
 			_valueColumn.PackStart(valueRenderer, true);
 			_valueColumn.SetCellDataFunc(valueRenderer, (TreeViewColumn col, CellRenderer cell, TreeModel model, TreeIter iter) => 
 			{

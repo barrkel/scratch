@@ -219,6 +219,22 @@ namespace Barrkel.ScratchPad
 				yield return (entry.Key, entry.Value);
 		}
 
+		// These GetOrDefault overloads are for pulling out settings
+
+		public string GetOrDefault(string name, string defaultValue)
+		{
+			if (TryLookup(name, out var result) && result.Type == ScratchType.String)
+				return result.StringValue;
+			return defaultValue;
+		}
+
+		public int GetOrDefault(string name, int defaultValue)
+		{
+			if (TryLookup(name, out var result) && result.Type == ScratchType.Int32)
+				return result.Int32Value;
+			return defaultValue;
+		}
+
 		IEnumerator IEnumerable.GetEnumerator()
 		{
 			return GetEnumerator();
