@@ -55,7 +55,7 @@ namespace Barrkel.ScratchPad
 				if (member.MemberType != MemberTypes.Method)
 					continue;
 				MethodInfo method = (MethodInfo)member;
-				foreach (ActionAttribute attr in Attribute.GetCustomAttributes(member, typeof(ActionAttribute)))
+				foreach (VariadicActionAttribute attr in Attribute.GetCustomAttributes(member, typeof(VariadicActionAttribute)))
 				{
 					ScratchAction action;
 					try
@@ -73,6 +73,38 @@ namespace Barrkel.ScratchPad
 						else
 						{
 							action = (ScratchAction)Delegate.CreateDelegate(typeof(ScratchAction), this, method, true);
+						}
+						Bindings.Add(attr.Name, new ScratchValue(action));
+					}
+					catch (Exception ex)
+					{
+						Console.WriteLine("Error binding {0}: {1}", method.Name, ex.Message);
+					}
+				}
+				foreach (TypedActionAttribute attr in Attribute.GetCustomAttributes(member, typeof(TypedActionAttribute)))
+				{
+					ScratchAction action;
+					try
+					{
+						if (method.ReturnType == typeof(void))
+						{
+							ScratchActionVoid voidAction =
+								(ScratchActionVoid)Delegate.CreateDelegate(typeof(ScratchActionVoid), this, method, true);
+							action = (context, args) =>
+							{
+								Validate(attr.Name, args, attr.ParamTypes);
+								voidAction(context, args);
+								return ScratchValue.Null;
+							};
+						}
+						else
+						{
+							var innerAction = (ScratchAction)Delegate.CreateDelegate(typeof(ScratchAction), this, method, true);
+							action = (context, args) =>
+							{
+								Validate(attr.Name, args, attr.ParamTypes);
+								return innerAction(context, args);
+							};
 						}
 						Bindings.Add(attr.Name, new ScratchValue(action));
 					}
@@ -106,9 +138,9 @@ namespace Barrkel.ScratchPad
 				throw new ArgumentException($"Expected {length} arguments to {method} but got {args.Count}");
 		}
 
-		protected void Validate(string method, IList<ScratchValue> args, params ScratchType[] paramTypes)
+		protected void Validate(string method, IList<ScratchValue> args, IList<ScratchType> paramTypes)
         {
-			ValidateLength(method, args, paramTypes.Length);
+			ValidateLength(method, args, paramTypes.Count);
 			for (int i = 0; i < args.Count; ++i)
 				if (args[i].Type != paramTypes[i])
 					throw new ArgumentException($"Expected arg {i + 1} to {method} to be {paramTypes[i]} but got {args[i].Type}");
@@ -193,11 +225,23 @@ namespace Barrkel.ScratchPad
 		}
 	}
 
-	// TODO: implement arg type validator
 	[AttributeUsage(AttributeTargets.Method, Inherited = false, AllowMultiple = true)]
-	public class ActionAttribute : Attribute
+	public class TypedActionAttribute : Attribute
 	{
-		public ActionAttribute(string name)
+		public TypedActionAttribute(string name, params ScratchType[] paramTypes)
+		{
+			Name = name;
+			ParamTypes = paramTypes;
+		}
+
+		public string Name { get; }
+		public IList<ScratchType> ParamTypes { get; }
+	}
+
+	[AttributeUsage(AttributeTargets.Method, Inherited = false, AllowMultiple = true)]
+	public class VariadicActionAttribute : Attribute
+	{
+		public VariadicActionAttribute(string name)
 		{
 			Name = name;
 		}

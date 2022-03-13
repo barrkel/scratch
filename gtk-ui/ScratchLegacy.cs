@@ -40,7 +40,7 @@ namespace Barrkel.ScratchPad
 			Bind("S-F5", new ScratchValue("dump-bindings"));
 		}
 
-		[Action("dump-bindings")]
+		[TypedAction("dump-bindings")]
 		public void DumpBindings(ExecutionContext context, IList<ScratchValue> args)
 		{
 			var rootController = context.Controller.RootController;
@@ -55,7 +55,7 @@ namespace Barrkel.ScratchPad
 			}
 		}
 
-		[Action("load-config")]
+		[TypedAction("load-config")]
 		public void LoadConfig(ExecutionContext context, IList<ScratchValue> args)
 		{
 			context.View.EnsureSaved();
@@ -98,7 +98,7 @@ namespace Barrkel.ScratchPad
 			}
 		}
 
-		[Action("get-cursor-text-re")]
+		[TypedAction("get-cursor-text-re", ScratchType.String)]
 		public ScratchValue DoGetCursorTextRe(ExecutionContext context, IList<ScratchValue> args)
 		{
 			// get-cursor-text-regex(regex) -> returns earliest text matching regex under cursor
@@ -156,32 +156,25 @@ namespace Barrkel.ScratchPad
 				: new ScratchValue(match);
 		}
 
-		[Action("dp")]
+		[VariadicAction("dp")]
 		public void DoDebugPrint(ExecutionContext context, IList<ScratchValue> args)
 		{
 			Console.WriteLine(string.Join(" ", args));
 		}
 
-		[Action("insert-text")]
-		public void DoInsertText(ExecutionContext context, IList<ScratchValue> args)
-		{
-			foreach (var arg in args.Where(x => x.Type == ScratchType.String))
-				context.View.InsertText(arg.StringValue);
-		}
-
-		[Action("insert-date")]
+		[TypedAction("insert-date")]
 		public void DoInsertDate(ExecutionContext context, IList<ScratchValue> args)
 		{
 			context.View.InsertText(DateTime.Today.ToString("yyyy-MM-dd"));
 		}
 
-		[Action("insert-datetime")]
+		[TypedAction("insert-datetime")]
 		public void DoInsertDateTime(ExecutionContext context, IList<ScratchValue> args)
 		{
 			context.View.InsertText(DateTime.Now.ToString("yyyy-MM-dd HH:mm"));
 		}
 
-		[Action("autoindent-return")]
+		[TypedAction("autoindent-return")]
 		public void DoAutoindentReturn(ExecutionContext context, IList<ScratchValue> args)
 		{
 			string text = context.View.CurrentText;
@@ -208,7 +201,7 @@ namespace Barrkel.ScratchPad
 			context.View.ScrollIntoView(context.View.CurrentPosition);
 		}
 
-		[Action("smart-paste")]
+		[TypedAction("smart-paste")]
 		public void DoSmartPaste(ExecutionContext context, IList<ScratchValue> args)
 		{
 			context.View.SelectedText = "";
@@ -435,7 +428,7 @@ namespace Barrkel.ScratchPad
 				.ToList();
 		}
 
-		[Action("occur")]
+		[TypedAction("occur")]
 		public void Occur(ExecutionContext context, IList<ScratchValue> args)
 		{
 			var lines = GetNonEmptyLines(context.View.CurrentText).ToList();
@@ -448,7 +441,7 @@ namespace Barrkel.ScratchPad
 			}
 		}
 
-		[Action("navigate-title")]
+		[TypedAction("navigate-title")]
 		public void NavigateTitle(ExecutionContext context, IList<ScratchValue> args)
 		{
 			context.View.EnsureSaved();
@@ -456,7 +449,7 @@ namespace Barrkel.ScratchPad
 				context.View.JumpToPage(found);
 		}
 
-		[Action("navigate-contents")]
+		[TypedAction("navigate-contents")]
 		public void NavigateContents(ExecutionContext context, IList<ScratchValue> args)
 		{
 			context.View.EnsureSaved();
@@ -470,25 +463,25 @@ namespace Barrkel.ScratchPad
 			}
 		}
 
-		[Action("navigate-todo")]
+		[TypedAction("navigate-todo")]
 		public void NavigateTodo(ExecutionContext context, IList<ScratchValue> args)
 		{
 			NavigateSigil(context, ScratchValue.List("=>"));
 		}
 
-		[Action("add-new-page")]
+		[TypedAction("add-new-page")]
 		public void AddNewPage(ExecutionContext context, IList<ScratchValue> args)
 		{
 			context.View.AddNewPage();
 		}
 
-		[Action("on-text-changed")]
+		[TypedAction("on-text-changed")]
 		public void OnTextChanged(ExecutionContext context, IList<ScratchValue> args)
 		{
 			// text has changed
 		}
 
-		[Action("indent-block")]
+		[TypedAction("indent-block")]
 		public void DoIndentBlock(ExecutionContext context, IList<ScratchValue> args)
 		{
 			string text = context.View.SelectedText;
@@ -500,7 +493,7 @@ namespace Barrkel.ScratchPad
 			context.View.SelectedText = AddIndent("  ", text, IndentOptions.SkipTrailingEmpty);
 		}
 
-		[Action("unindent-block")]
+		[TypedAction("unindent-block")]
 		public void DoUnindentBlock(ExecutionContext context, IList<ScratchValue> args)
 		{
 			// remove 2 spaces or a tab or one space from every line
@@ -527,7 +520,7 @@ namespace Barrkel.ScratchPad
 			context.View.SelectedText = string.Join("\n", lines);
 		}
 
-		[Action("exit-page")]
+		[TypedAction("exit-page")]
 		public void ExitPage(ExecutionContext context, IList<ScratchValue> args)
 		{
 			ScratchPage page = GetPage(context.View.Book, context.View.CurrentPageIndex);
@@ -538,7 +531,7 @@ namespace Barrkel.ScratchPad
 			state.CurrentScrollPos = context.View.ScrollPos;
 		}
 
-		[Action("enter-page")]
+		[TypedAction("enter-page")]
 		public void EnterPage(ExecutionContext context, IList<ScratchValue> args)
 		{
 			ScratchPage page = GetPage(context.View.Book, context.View.CurrentPageIndex);
@@ -669,14 +662,14 @@ namespace Barrkel.ScratchPad
 			return result;
 		}
 
-		[Action("check-for-save")]
+		[TypedAction("check-for-save")]
 		internal ScratchValue CheckForSave(ExecutionContext context, IList<ScratchValue> args)
 		{
 			// ...
 			return ScratchValue.Null;
 		}
 
-		[Action("complete")]
+		[TypedAction("complete")]
 		public void CompleteAtPoint(ExecutionContext context, IList<ScratchValue> args)
 		{
 			// Emacs-style complete-at-point
@@ -728,10 +721,9 @@ namespace Barrkel.ScratchPad
 			return book.Pages[index];
 		}
 
-		[Action("navigate-sigil")]
+		[TypedAction("navigate-sigil", ScratchType.String)]
 		public void NavigateSigil(ExecutionContext context, IList<ScratchValue> args)
 		{
-			Validate("navigate-sigil", args, ScratchType.String);
 			string sigil = args[0].StringValue;
 			context.View.EnsureSaved();
 			if (context.View.RunSearch(text => TrySearch(context.View.Book, $"^\\s*{Regex.Escape(sigil)}.*{text}",

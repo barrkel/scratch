@@ -16,75 +16,76 @@ namespace Barrkel.ScratchPad
         }
 
         /****************************************************************************************************/
+        // Meta
+        /****************************************************************************************************/
+
+        [TypedAction("is-defined", ScratchType.String)]
+        public ScratchValue IsDefined(ExecutionContext context, IList<ScratchValue> args)
+        {
+            return ScratchValue.From(context.Scope.TryLookup(args[0].StringValue, out _));
+        }
+
+        /****************************************************************************************************/
         // Operators
         /****************************************************************************************************/
 
         // lets see how long we can get away without arithmetic in the language
 
-        [Action("add")]
+        [TypedAction("add", ScratchType.Int32, ScratchType.Int32)]
         public ScratchValue DoAdd(ExecutionContext context, IList<ScratchValue> args)
         {
-            Validate("add", args, ScratchType.Int32, ScratchType.Int32);
             return new ScratchValue(args[0].Int32Value + args[1].Int32Value);
         }
 
-        [Action("sub")]
+        [TypedAction("sub", ScratchType.Int32, ScratchType.Int32)]
         public ScratchValue DoSub(ExecutionContext context, IList<ScratchValue> args)
         {
-            Validate("sub", args, ScratchType.Int32, ScratchType.Int32);
             return new ScratchValue(args[0].Int32Value - args[1].Int32Value);
         }
 
-        [Action("mul")]
+        [TypedAction("mul", ScratchType.Int32, ScratchType.Int32)]
         public ScratchValue DoMul(ExecutionContext context, IList<ScratchValue> args)
         {
-            Validate("mul", args, ScratchType.Int32, ScratchType.Int32);
             return new ScratchValue(args[0].Int32Value * args[1].Int32Value);
         }
 
-        [Action("div")]
+        [TypedAction("div", ScratchType.Int32, ScratchType.Int32)]
         public ScratchValue DoDiv(ExecutionContext context, IList<ScratchValue> args)
         {
-            Validate("div", args, ScratchType.Int32, ScratchType.Int32);
             return new ScratchValue(args[0].Int32Value / args[1].Int32Value);
         }
 
-        [Action("mod")]
+        [TypedAction("mod", ScratchType.Int32, ScratchType.Int32)]
         public ScratchValue DoMod(ExecutionContext context, IList<ScratchValue> args)
         {
-            Validate("mod", args, ScratchType.Int32, ScratchType.Int32);
             return new ScratchValue(args[0].Int32Value % args[1].Int32Value);
         }
 
-        [Action("lt")]
+        [TypedAction("lt", ScratchType.Int32, ScratchType.Int32)]
         public ScratchValue DoLt(ExecutionContext context, IList<ScratchValue> args)
         {
-            Validate("lt", args, ScratchType.Int32, ScratchType.Int32);
             return ScratchValue.From(args[0].Int32Value < args[1].Int32Value);
         }
 
-        [Action("gt")]
+        [TypedAction("gt", ScratchType.Int32, ScratchType.Int32)]
         public ScratchValue DoGt(ExecutionContext context, IList<ScratchValue> args)
         {
-            Validate("gt", args, ScratchType.Int32, ScratchType.Int32);
             return ScratchValue.From(args[0].Int32Value > args[1].Int32Value);
         }
 
-        [Action("le")]
+        [TypedAction("le", ScratchType.Int32, ScratchType.Int32)]
         public ScratchValue DoLe(ExecutionContext context, IList<ScratchValue> args)
         {
-            Validate("le", args, ScratchType.Int32, ScratchType.Int32);
             return ScratchValue.From(args[0].Int32Value <= args[1].Int32Value);
         }
 
-        [Action("ge")]
+        [TypedAction("ge", ScratchType.Int32, ScratchType.Int32)]
         public ScratchValue DoGe(ExecutionContext context, IList<ScratchValue> args)
         {
-            Validate("ge", args, ScratchType.Int32, ScratchType.Int32);
             return ScratchValue.From(args[0].Int32Value >= args[1].Int32Value);
         }
 
-        [Action("eq")]
+        [VariadicAction("eq")]
         public ScratchValue DoEq(ExecutionContext context, IList<ScratchValue> args)
         {
             ValidateLength("eq", args, 2);
@@ -103,7 +104,7 @@ namespace Barrkel.ScratchPad
             }
         }
 
-        [Action("ne")]
+        [VariadicAction("ne")]
         public ScratchValue DoNe(ExecutionContext context, IList<ScratchValue> args)
         {
             ValidateLength("ne", args, 2);
@@ -126,30 +127,27 @@ namespace Barrkel.ScratchPad
         // String operations
         /****************************************************************************************************/
 
-        [Action("length")]
+        [TypedAction("length", ScratchType.String)]
         public ScratchValue DoLength(ExecutionContext context, IList<ScratchValue> args)
         {
-            Validate("length", args, ScratchType.String);
             return new ScratchValue(args[0].StringValue.Length);
         }
 
-        [Action("to-int")]
+        [TypedAction("to-int", ScratchType.String)]
         public ScratchValue DoToInt(ExecutionContext context, IList<ScratchValue> args)
         {
-            Validate("to-int", args, ScratchType.String);
             if (int.TryParse(args[0].StringValue, out var x))
                 return new ScratchValue(x);
             return ScratchValue.Null;
         }
 
-        [Action("to-str")]
+        [TypedAction("to-str", ScratchType.Int32)]
         public ScratchValue DoToStr(ExecutionContext context, IList<ScratchValue> args)
         {
-            Validate("to-str", args, ScratchType.Int32);
             return new ScratchValue(args[0].Int32Value.ToString());
         }
 
-        [Action("gsub")]
+        [TypedAction("gsub", ScratchType.String, ScratchType.String, ScratchType.String)]
         public ScratchValue DoGsub(ExecutionContext context, IList<ScratchValue> args)
         {
             // args: (text-to-scan, regex, replacement)
@@ -159,7 +157,7 @@ namespace Barrkel.ScratchPad
             return new ScratchValue(re.Replace(args[0].StringValue, args[2].StringValue));
         }
 
-        [Action("match-re")]
+        [TypedAction("match-re", ScratchType.String, ScratchType.String)]
         public ScratchValue DoMatchRe(ExecutionContext context, IList<ScratchValue> args)
         {
             // args: (text-to-scan, regex)
@@ -173,7 +171,7 @@ namespace Barrkel.ScratchPad
             return ScratchValue.Null;
         }
 
-        [Action("concat")]
+        [VariadicAction("concat")]
         public ScratchValue DoConcat(ExecutionContext context, IList<ScratchValue> args)
         {
             StringBuilder result = new StringBuilder();
@@ -196,24 +194,22 @@ namespace Barrkel.ScratchPad
             return new ScratchValue(result.ToString());
         }
 
-        [Action("format")]
+        [VariadicAction("format")]
         public ScratchValue DoFormat(ExecutionContext context, IList<ScratchValue> args)
         {
             return new ScratchValue(string.Format(args[0].StringValue,
                 args.Skip(1).Select(x => x.ObjectValue).ToArray()));
         }
 
-        [Action("get-string-from-to")]
+        [TypedAction("get-string-from-to", ScratchType.String, ScratchType.Int32, ScratchType.Int32)]
         public ScratchValue GetStringFromTo(ExecutionContext context, IList<ScratchValue> args)
         {
-            Validate("get-string-from-to", args, ScratchType.String, ScratchType.Int32, ScratchType.Int32);
             return ScratchValue.From(args[0].StringValue.Substring(args[1].Int32Value, args[1].Int32Value + args[2].Int32Value));
         }
 
-        [Action("char-at")]
+        [TypedAction("char-at", ScratchType.String, ScratchType.Int32)]
         public ScratchValue GetCharAt(ExecutionContext context, IList<ScratchValue> args)
         {
-            Validate("char-at", args, ScratchType.String, ScratchType.Int32);
             int pos = args[1].Int32Value;
             string s = args[0].StringValue;
             if (pos < 0 || pos >= s.Length)
@@ -225,7 +221,7 @@ namespace Barrkel.ScratchPad
         // OS interaction
         /****************************************************************************************************/
 
-        [Action("open")]
+        [VariadicAction("open")]
         public void DoOpen(ExecutionContext context, IList<ScratchValue> args)
         {
             if (args.Count != 1)
@@ -233,7 +229,7 @@ namespace Barrkel.ScratchPad
             Process.Start(args[0].StringValue);
         }
 
-        [Action("exec")]
+        [VariadicAction("exec")]
         public void DoExec(ExecutionContext context, IList<ScratchValue> args)
         {
             // TODO: upgrade to .net Core and use ArgumentList
@@ -249,67 +245,65 @@ namespace Barrkel.ScratchPad
         // View interaction
         /****************************************************************************************************/
 
-        [Action("get-view-text")]
+        [VariadicAction("insert-text")]
+        public void DoInsertText(ExecutionContext context, IList<ScratchValue> args)
+        {
+            foreach (var arg in args.Where(x => x.Type == ScratchType.String))
+                context.View.InsertText(arg.StringValue);
+        }
+
+        [TypedAction("get-view-text")]
         public ScratchValue GetViewText(ExecutionContext context, IList<ScratchValue> args)
         {
-            Validate("get-view-text", args);
             return ScratchValue.From(context.View.CurrentText);
         }
 
-        [Action("get-view-pos")]
+        [TypedAction("get-view-pos")]
         public ScratchValue GetViewPos(ExecutionContext context, IList<ScratchValue> args)
         {
-            Validate("get-view-pos", args);
             return ScratchValue.From(context.View.CurrentPosition);
         }
 
-        [Action("get-line-start")]
+        [TypedAction("get-line-start", ScratchType.String, ScratchType.Int32)]
         public ScratchValue DoGetLineStart(ExecutionContext context, IList<ScratchValue> args)
         {
-            Validate("get-line-start", args, ScratchType.String, ScratchType.Int32);
             return ScratchValue.From(GetLineStart(args[0].StringValue, args[1].Int32Value));
         }
 
-        [Action("get-line-end")]
+        [TypedAction("get-line-end", ScratchType.String, ScratchType.Int32)]
         public ScratchValue DoGetLineEnd(ExecutionContext context, IList<ScratchValue> args)
         {
-            Validate("get-line-end", args, ScratchType.String, ScratchType.Int32);
             return ScratchValue.From(GetLineEnd(args[0].StringValue, args[1].Int32Value));
         }
 
-        [Action("set-view-pos")]
+        [TypedAction("set-view-pos", ScratchType.Int32)]
         public void SetViewPos(ExecutionContext context, IList<ScratchValue> args)
         {
-            Validate("set-view-pos", args, ScratchType.Int32);
             int pos = args[0].Int32Value;
             context.View.Selection = (pos, pos);
         }
 
-        [Action("set-view-selection")]
+        [TypedAction("set-view-selection", ScratchType.Int32, ScratchType.Int32)]
         public void SetViewSelection(ExecutionContext context, IList<ScratchValue> args)
         {
-            Validate("get-view-selection", args, ScratchType.Int32, ScratchType.Int32);
             context.View.Selection = (args[0].Int32Value, args[1].Int32Value);
         }
 
-        [Action("get-view-selected-text")]
+        [TypedAction("get-view-selected-text")]
         public ScratchValue GetViewSelectedText(ExecutionContext context, IList<ScratchValue> args)
         {
-            Validate("get-view-selected-text", args);
             return ScratchValue.From(context.View.SelectedText);
         }
 
-        [Action("set-view-selected-text")]
+        [TypedAction("set-view-selected-text", ScratchType.String)]
         public void SetViewSelectedText(ExecutionContext context, IList<ScratchValue> args)
         {
-            Validate("set-view-selected-text", args, ScratchType.String);
             context.View.SelectedText = args[0].StringValue;
         }
 
-        [Action("scroll-pos-into-view")]
+        [TypedAction("scroll-pos-into-view", ScratchType.Int32)]
         public void ScrollPosIntoView(ExecutionContext context, IList<ScratchValue> args)
         {
-            Validate("scroll-pos-into-view", args, ScratchType.Int32);
             context.View.ScrollIntoView(args[0].Int32Value);
         }
 
@@ -361,7 +355,7 @@ namespace Barrkel.ScratchPad
         // these actions can be completely replaced by script
         // we need to look at shipping a standard library script
 
-        [Action("goto-eol")]
+        [TypedAction("goto-eol")]
         public void GotoEol(ExecutionContext context, IList<ScratchValue> args)
         {
             string text = context.View.CurrentText;
@@ -370,7 +364,7 @@ namespace Barrkel.ScratchPad
             context.View.Selection = (eol, eol);
         }
 
-        [Action("goto-sol")]
+        [TypedAction("goto-sol")]
         public void GotoSol(ExecutionContext context, IList<ScratchValue> args)
         {
             // NOTE: does not extend selection
