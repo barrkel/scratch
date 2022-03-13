@@ -538,14 +538,9 @@ namespace Barrkel.ScratchPad
 		// Additively load bindings from text.
 		public static ConfigFileLibrary Load(string name, string source)
 		{
-			// TODO: implement if; a lot of things get better with if
-			// TODO: consider early exit (return)
 			// TODO: consider error handling
-			// DONE: implement argument binding for blocks so we can write functions
 			// TODO: extend ScratchValue with basic syntax tree, mainly for easier introspection of bindings
-			// TODO: rewrite as many actions as possible in ScratchConf to get a feel for limits
 			// TODO: accept identifier syntax in more contexts if not ambiguous
-			// TODO: allow binding keys to functions directly, turns out it's tedious to have to name everything
 
 			/*
 			   Grammar:

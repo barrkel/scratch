@@ -37,27 +37,63 @@ namespace Barrkel.ScratchPad
 			Bind("C-n", new ScratchValue("add-new-page"));
 
 			Bind("F5", new ScratchValue("load-config"));
+			Bind("S-F5", new ScratchValue("dump-bindings"));
+		}
+
+		[Action("dump-bindings")]
+		public void DumpBindings(ExecutionContext context, IList<ScratchValue> args)
+		{
+			var rootController = context.Controller.RootController;
+			Console.WriteLine("For root:");
+			foreach (var entry in rootController.RootScope)
+				Console.WriteLine($"  {entry.Item1} => {entry.Item2}");
+			foreach (var book in rootController.Root.Books)
+			{
+				Console.WriteLine($"For book: {book.Name}");
+				foreach (var entry in rootController.GetControllerFor(book).Scope)
+					Console.WriteLine($"  {entry.Item1} => {entry.Item2}");
+			}
 		}
 
 		[Action("load-config")]
 		public void LoadConfig(ExecutionContext context, IList<ScratchValue> args)
 		{
 			context.View.EnsureSaved();
-			// TODO: consider (re)loading for all books
 			// TODO: consider load vs reload
-			// TODO: apply configs at different levels (page / mode, root)
 			// TODO: consider adding unpersisted view-only page type for errors
-			foreach (var (title, index) in context.View.Book.SearchTitles(new Regex(@"^\.config\b.*")))
+
+			// Load global configs first
+			var rootController = context.Controller.RootController;
+			var root = rootController.Root;
+			foreach (var book in root.Books)
 			{
-				try
+				foreach (var (title, index) in book.SearchTitles(new Regex(@"^\.globalconfig\b.*")))
 				{
-					var library = ConfigFileLibrary.Load(title, context.View.Book.Pages[index].Text);
-					context.Controller.Scope.Load(library);
+					var library = ConfigFileLibrary.Load(title, book.Pages[index].Text);
+					try
+					{
+						rootController.RootScope.Load(library);
+					}
+					catch (Exception ex)
+					{
+						// it's ugly but it should work
+						context.View.InsertText(ex.Message);
+					}
 				}
-				catch (Exception ex)
+			}
+			foreach (var book in root.Books)
+			{
+				foreach (var (title, index) in book.SearchTitles(new Regex(@"^\.config\b.*")))
 				{
-					// it's ugly but it should work
-					context.View.InsertText(ex.Message);
+					var library = ConfigFileLibrary.Load(title, book.Pages[index].Text);
+					try
+					{
+						rootController.GetControllerFor(book).Scope.Load(library);
+					}
+					catch (Exception ex)
+					{
+						context.View.InsertText(ex.Message);
+					}
 				}
 			}
 		}

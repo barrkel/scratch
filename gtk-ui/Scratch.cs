@@ -96,7 +96,8 @@ namespace Barrkel.ScratchPad
 				for (int i = 0; i < count; ++i)
 				{
 					string name = StringUtil.Unescape(r.ReadLine());
-					DateTime timestamp = DateTime.Parse(r.ReadLine());
+					// This is parsing UTC but it doesn't return UTC!
+					DateTime timestamp = DateTime.Parse(r.ReadLine()).ToUniversalTime();
 					string line = StringUtil.Unescape(r.ReadLine());
 					_cache[name] = (timestamp, line);
 				}
