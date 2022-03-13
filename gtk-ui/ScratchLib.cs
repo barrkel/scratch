@@ -218,6 +218,103 @@ namespace Barrkel.ScratchPad
         }
 
         /****************************************************************************************************/
+        // String operations which are more 'editor' operations
+        /****************************************************************************************************/
+
+        [TypedAction("get-line-indent", ScratchType.String, ScratchType.Int32)]
+        // get-whitespace(text, get-line-start(text, position), position)
+        public ScratchValue GetLineIndent(ExecutionContext context, IList<ScratchValue> args)
+        {
+            string text = args[0].StringValue;
+            int position = args[1].Int32Value;
+            int lineStart = GetLineStart(text, position);
+            return ScratchValue.From(DoGetWhitespace(text, lineStart, position));
+        }
+
+        // Extract all whitespace from text[position] up to least(non-whitespace, max).
+        // get-whitespace(text, position, max)
+        [TypedAction("get-whitespace", ScratchType.String, ScratchType.Int32, ScratchType.Int32)]
+        public ScratchValue GetWhitespace(ExecutionContext context, IList<ScratchValue> args)
+        {
+            string text = args[0].StringValue;
+            int position = args[1].Int32Value;
+            int max = args[2].Int32Value;
+
+            return ScratchValue.From(DoGetWhitespace(text, position, max));
+        }
+
+        private string DoGetWhitespace(string text, int position, int max)
+        {
+            int start = position;
+            while (position < text.Length && position < max)
+            {
+                char ch = text[position];
+                if (ch == '\r' || ch == '\n')
+                    break;
+                if (char.IsWhiteSpace(ch))
+                    ++position;
+                else
+                    break;
+            }
+            return text.Substring(start, position - start);
+        }
+
+        [TypedAction("reset-indent", ScratchType.String)]
+        public ScratchValue ResetIndent(ExecutionContext context, IList<ScratchValue> args)
+        {
+            string text = args[0].StringValue;
+
+            string[] lines = text.Split('\r', '\n');
+            int minIndent = int.MaxValue;
+            // TODO: make this tab-aware
+            foreach (string line in lines)
+            {
+                int indent = DoGetWhitespace(line, 0, line.Length).Length;
+                // don't count empty lines, or lines with only whitespace
+                if (indent == line.Length)
+                    continue;
+                minIndent = Math.Min(minIndent, indent);
+            }
+            if (minIndent == 0)
+                return ScratchValue.From(text);
+            for (int i = 0; i < lines.Length; ++i)
+                if (minIndent >= lines[i].Length)
+                    lines[i] = "";
+                else
+                    lines[i] = lines[i].Substring(minIndent);
+            return ScratchValue.From(string.Join("\n", lines));
+        }
+
+        // (text, indent) - note this is opposite to original
+        [TypedAction("add-indent", ScratchType.String, ScratchType.String)]
+        public ScratchValue AddIndent(ExecutionContext context, IList<ScratchValue> args)
+        {
+            return ScratchValue.From(AddIndent(args[0].StringValue, args[1].StringValue));
+        }
+
+        enum IndentOptions
+        {
+            None,
+            SkipFirst,
+            SkipTrailingEmpty
+        }
+
+        private string AddIndent(string text, string indent, IndentOptions options = IndentOptions.None)
+        {
+            string[] lines = text.Split(new[] { '\r', '\n' }, StringSplitOptions.None);
+            int firstLine = options == IndentOptions.SkipFirst ? 1 : 0;
+            int lastLine = lines.Length - 1;
+            if (lastLine >= 0 && options == IndentOptions.SkipTrailingEmpty && string.IsNullOrEmpty(lines[lastLine]))
+                --lastLine;
+            for (int i = firstLine; i <= lastLine; ++i)
+            {
+                lines[i] = indent + lines[i];
+            }
+            return string.Join("\n", lines);
+        }
+
+
+        /****************************************************************************************************/
         // OS interaction
         /****************************************************************************************************/
 
@@ -250,6 +347,12 @@ namespace Barrkel.ScratchPad
         {
             foreach (var arg in args.Where(x => x.Type == ScratchType.String))
                 context.View.InsertText(arg.StringValue);
+        }
+
+        [TypedAction("get-clipboard")]
+        public ScratchValue GetClipboard(ExecutionContext context, IList<ScratchValue> args)
+        {
+            return ScratchValue.From(context.View.Clipboard);
         }
 
         [TypedAction("get-view-text")]
