@@ -458,8 +458,8 @@ namespace Barrkel.ScratchPad
 				int cp = ip++;
 				if (DebugStack)
 				{
-					Console.WriteLine("  stack: {0}", string.Join(", ", stack));
-					Console.WriteLine(_ops[cp]);
+					Log.Out($"  stack: {string.Join(", ", stack)}");
+					Log.Out(_ops[cp].ToString());
 				}
 				switch (_ops[cp].Operation)
 				{
@@ -588,7 +588,7 @@ namespace Barrkel.ScratchPad
 					lexer.Eat(ScopeToken.Eq);
 					var value = ParseSettingValue(lexer);
 					result.Bindings.Add(ident, value);
-					Console.WriteLine("Bound {0} to {1}", ident, value);
+					Log.Out($"Bound {ident} to {value}");
 				}
 
 				return result;

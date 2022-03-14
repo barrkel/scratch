@@ -10,6 +10,16 @@ using System.Collections;
 
 namespace Barrkel.ScratchPad
 {
+	public static class Log
+	{
+		public static Action<string> Handler { get; set; } = Console.Error.WriteLine;
+
+		public static void Out(string line)
+		{
+			Handler(line);
+		}
+	}
+
 	public class Options
 	{
 		public Options(List<string> args)

@@ -90,6 +90,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="LogView.cs" />
     <Compile Include="BookView.cs" />
     <Compile Include="ScratchConf.cs" />
     <Compile Include="ScratchController.cs" />

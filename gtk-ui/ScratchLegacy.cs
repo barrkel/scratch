@@ -44,14 +44,14 @@ namespace Barrkel.ScratchPad
 		public void DumpBindings(ExecutionContext context, IList<ScratchValue> args)
 		{
 			var rootController = context.Controller.RootController;
-			Console.WriteLine("For root:");
+			Log.Out("For root:");
 			foreach (var entry in rootController.RootScope)
-				Console.WriteLine($"  {entry.Item1} => {entry.Item2}");
+				Log.Out($"  {entry.Item1} => {entry.Item2}");
 			foreach (var book in rootController.Root.Books)
 			{
-				Console.WriteLine($"For book: {book.Name}");
+				Log.Out($"For book: {book.Name}");
 				foreach (var entry in rootController.GetControllerFor(book).Scope)
-					Console.WriteLine($"  {entry.Item1} => {entry.Item2}");
+					Log.Out($"  {entry.Item1} => {entry.Item2}");
 			}
 		}
 
@@ -159,7 +159,7 @@ namespace Barrkel.ScratchPad
 		[VariadicAction("dp")]
 		public void DoDebugPrint(ExecutionContext context, IList<ScratchValue> args)
 		{
-			Console.WriteLine(string.Join(" ", args));
+			Log.Out(string.Join(" ", args));
 		}
 
 		[TypedAction("insert-date")]
@@ -658,7 +658,7 @@ namespace Barrkel.ScratchPad
 			GetTextCompletions(text, test, add);
 			GetTitleCompletions(book, test, add);
 
-			result.ForEach(Console.WriteLine);
+			result.ForEach(Log.Out);
 			return result;
 		}
 

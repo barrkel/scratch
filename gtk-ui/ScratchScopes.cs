@@ -78,7 +78,7 @@ namespace Barrkel.ScratchPad
 					}
 					catch (Exception ex)
 					{
-						Console.WriteLine("Error binding {0}: {1}", method.Name, ex.Message);
+						Log.Out($"Error binding {method.Name}: {ex.Message}");
 					}
 				}
 				foreach (TypedActionAttribute attr in Attribute.GetCustomAttributes(member, typeof(TypedActionAttribute)))
@@ -110,7 +110,7 @@ namespace Barrkel.ScratchPad
 					}
 					catch (Exception ex)
 					{
-						Console.WriteLine("Error binding {0}: {1}", method.Name, ex.Message);
+						Log.Out($"Error binding {method.Name}: {ex.Message}");
 					}
 				}
 			}

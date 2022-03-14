@@ -35,10 +35,11 @@ namespace Barrkel.GtkScratchPad
 				ScratchBookController controller = RootController.GetControllerFor(book);
 				BookView view = new BookView(book, controller, AppSettings, this);
 				views.Add(view);
-				Label viewLabel = new Label { Text = book.ToString() };
-				viewLabel.SetPadding(10, 2);
-				_notebook.AppendPage(view, viewLabel);
+				_notebook.AppendPage(view, CreateTabLabel(book.Name));
 			}
+			var logView = new LogView(AppSettings, this);
+			_notebook.AppendPage(logView, CreateTabLabel("log"));
+			Log.Handler = logView.AppendLine;
 
 			Add(_notebook);
 
@@ -49,6 +50,13 @@ namespace Barrkel.GtkScratchPad
 					view.EnsureSaved();
 				Application.Quit();
 			};
+		}
+
+		private static Label CreateTabLabel(string title)
+		{
+			Label viewLabel = new Label { Text = title };
+			viewLabel.SetPadding(10, 2);
+			return viewLabel;
 		}
 	}
 }

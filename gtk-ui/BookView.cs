@@ -387,7 +387,7 @@ namespace Barrkel.GtkScratchPad
 			}
 			else 
 			{
-				Console.WriteLine("Not mapped: {0}", evnt.Key);
+				Log.Out($"Not mapped: {evnt.Key}");
 			}
 
 			var state = evnt.State & Gdk.ModifierType.Mod1Mask;
