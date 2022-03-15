@@ -152,7 +152,7 @@ namespace Barrkel.ScratchPad
         {
             // args: (text-to-scan, regex, replacement)
             Regex re = new Regex(args[1].StringValue,
-                RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled,
+                RegexOptions.IgnoreCase | RegexOptions.Compiled,
                 TimeSpan.FromSeconds(1));
             return new ScratchValue(re.Replace(args[0].StringValue, args[2].StringValue));
         }
@@ -408,6 +408,12 @@ namespace Barrkel.ScratchPad
         public void ScrollPosIntoView(ExecutionContext context, IList<ScratchValue> args)
         {
             context.View.ScrollIntoView(args[0].Int32Value);
+        }
+
+        [TypedAction("ensure-saved")]
+        public void EnsureSaved(ExecutionContext context, IList<ScratchValue> args)
+        {
+            context.View.EnsureSaved();
         }
 
         // Gets the position of the character which starts the line.

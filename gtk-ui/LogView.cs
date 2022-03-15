@@ -60,8 +60,8 @@ namespace Barrkel.GtkScratchPad
 			_textView.Buffer.Insert(ref end, text);
 			if (_length > MaxLength)
 				Trim();
-			// 
-			_textView.ScrollToIter(end, 0, false, 0, 0);
+			_textView.ScrollToIter(
+				_textView.Buffer.GetIterAtOffset(_length), 0, false, 0, 0);
 		}
 
 		public void Trim()
