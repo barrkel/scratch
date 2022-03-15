@@ -138,12 +138,24 @@ namespace Barrkel.ScratchPad
 				throw new ArgumentException($"Expected {length} arguments to {method} but got {args.Count}");
 		}
 
+		protected void ValidateArgument(string method, IList<ScratchValue> args, int index, ScratchType paramType)
+		{
+			if (args[index].Type != paramType)
+				throw new ArgumentException($"Expected arg {index + 1} to {method} to be {paramType} but got {args[index].Type}");
+		}
+
+		protected void ValidateArgument(string method, IList<ScratchValue> args, int index, ScratchType paramType,
+			ScratchType paramType2)
+		{
+			if (args[index].Type != paramType && args[index].Type != paramType2)
+				throw new ArgumentException($"Expected arg {index + 1} to {method} to be {paramType} but got {args[index].Type}");
+		}
+
 		protected void Validate(string method, IList<ScratchValue> args, IList<ScratchType> paramTypes)
         {
 			ValidateLength(method, args, paramTypes.Count);
 			for (int i = 0; i < args.Count; ++i)
-				if (args[i].Type != paramTypes[i])
-					throw new ArgumentException($"Expected arg {i + 1} to {method} to be {paramTypes[i]} but got {args[i].Type}");
+				ValidateArgument(method, args, i, paramTypes[i]);
 		}
 	}
 

@@ -147,14 +147,50 @@ namespace Barrkel.ScratchPad
             return new ScratchValue(args[0].Int32Value.ToString());
         }
 
-        [TypedAction("gsub", ScratchType.String, ScratchType.String, ScratchType.String)]
+        [VariadicAction("gsub")]
         public ScratchValue DoGsub(ExecutionContext context, IList<ScratchValue> args)
         {
             // args: (text-to-scan, regex, replacement)
+            // Replacement may be a string or a function invoked per match.
+            // If it's a function, and it has a parameter, it receives the matched text.
+            // If the regex has named capture groups, they're locally bound for the duration of the invocation.
+            ValidateLength("gsub", args, 3);
+            ValidateArgument("gsub", args, 0, ScratchType.String);
+            ValidateArgument("gsub", args, 1, ScratchType.String);
+            ValidateArgument("gsub", args, 2, ScratchType.String, ScratchType.ScratchFunction);
             Regex re = new Regex(args[1].StringValue,
-                RegexOptions.IgnoreCase | RegexOptions.Compiled,
+                RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.Multiline,
                 TimeSpan.FromSeconds(1));
-            return new ScratchValue(re.Replace(args[0].StringValue, args[2].StringValue));
+            ScratchValue replacement = args[2];
+            switch (replacement.Type)
+            {
+                case ScratchType.String:
+                    return new ScratchValue(re.Replace(args[0].StringValue, replacement.StringValue));
+
+                case ScratchType.ScratchFunction:
+                    return ScratchValue.From(re.Replace(args[0].StringValue, match =>
+                    {
+                        var child = context.CreateChild();
+                        foreach (Group g in match.Groups)
+                            child.Scope.AssignLocal(g.Name, ScratchValue.From(g.Value));
+                        switch (replacement.FunctionValue.Parameters.Count)
+                        {
+                            case 0:
+                                return replacement.FunctionValue.Program.Run(child).StringValue;
+
+                            case 1:
+                                child.Scope.AssignLocal(replacement.FunctionValue.Parameters[0],
+                                    ScratchValue.From(match.Value));
+                                return replacement.FunctionValue.Program.Run(child).StringValue;
+
+                            default:
+                                throw new ArgumentException("Function arg to gsub may have at most 1 parameter");
+                        }
+                    }));
+
+                default:
+                    throw new ArgumentException("Never reached");
+            }
         }
 
         [TypedAction("match-re", ScratchType.String, ScratchType.String)]
