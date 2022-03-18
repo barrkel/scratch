@@ -526,7 +526,7 @@ namespace Barrkel.ScratchPad
 			ScratchPage page = GetPage(context.View.Book, context.View.CurrentPageIndex);
 			if (page == null)
 				return;
-			PageViewState state = page.GetViewState(context.View);
+			PageViewState state = page.GetViewState(context.View, PageViewState.Create);
 			state.CurrentSelection = context.View.Selection;
 			state.CurrentScrollPos = context.View.ScrollPos;
 		}
@@ -537,7 +537,7 @@ namespace Barrkel.ScratchPad
 			ScratchPage page = GetPage(context.View.Book, context.View.CurrentPageIndex);
 			if (page == null)
 				return;
-			PageViewState state = page.GetViewState(context.View);
+			PageViewState state = page.GetViewState(context.View, PageViewState.Create);
 			if (state.CurrentSelection.HasValue)
 				context.View.Selection = state.CurrentSelection.Value;
 			if (state.CurrentScrollPos.HasValue)
@@ -679,7 +679,7 @@ namespace Barrkel.ScratchPad
 			// Completion symbols come from all words ([A-Za-z0-9_-]+) in the document.
 			var page = GetPage(context.View.Book, context.View.CurrentPageIndex);
 			string text = context.View.CurrentText;
-			var state = page.GetViewState(context.View);
+			var state = page.GetViewState(context.View, PageViewState.Create);
 			var (currentStart, currentEnd) = state.CurrentCompletion.GetValueOrDefault();
 			var currentPos = context.View.CurrentPosition;
 			string prefix, suffix;
