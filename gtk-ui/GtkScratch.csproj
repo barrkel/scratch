@@ -97,6 +97,7 @@
     <Compile Include="ScratchLegacy.cs" />
     <Compile Include="ScratchLib.cs" />
     <Compile Include="ScratchScopes.cs" />
+    <Compile Include="SnippetWindow.cs" />
     <Compile Include="SearchWindow.cs" />
     <Compile Include="MainWindow.cs" />
     <Compile Include="Program.cs" />

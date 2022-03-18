@@ -687,5 +687,11 @@ namespace Barrkel.GtkScratchPad
 				_textView.Buffer.SelectRange(start, end);
 			}
 		}
+
+		public void LaunchSnippet(ScratchScope settings)
+		{
+			SnippetWindow window = new SnippetWindow(settings);
+			window.ShowAll();
+		}
 	}
 }

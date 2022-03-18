@@ -140,7 +140,7 @@ namespace Barrkel.GtkScratchPad
 		TreeViewColumn _valueColumn;
 		int _searchResultsStoreCount; // asinine results store
 		
-		SearchWindow(SearchFunc searchFunc, Settings appSettings) : base("GTK ScratchPad")
+		SearchWindow(SearchFunc searchFunc, Settings appSettings) : base("ScratchPad")
 		{
 			SearchFunc = searchFunc;
 			AppSettings = appSettings;

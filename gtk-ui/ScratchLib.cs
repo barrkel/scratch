@@ -207,6 +207,12 @@ namespace Barrkel.ScratchPad
             return ScratchValue.Null;
         }
 
+        [TypedAction("escape-re", ScratchType.String)]
+        public ScratchValue EscapeRe(ExecutionContext context, IList<ScratchValue> args)
+        {
+            return ScratchValue.From(Regex.Escape(args[0].StringValue));
+        }
+
         [VariadicAction("concat")]
         public ScratchValue DoConcat(ExecutionContext context, IList<ScratchValue> args)
         {
@@ -243,6 +249,12 @@ namespace Barrkel.ScratchPad
             return ScratchValue.From(args[0].StringValue.Substring(args[1].Int32Value, args[1].Int32Value + args[2].Int32Value));
         }
 
+        [TypedAction("substring", ScratchType.String, ScratchType.Int32, ScratchType.Int32)]
+        public ScratchValue Subtring(ExecutionContext context, IList<ScratchValue> args)
+        {
+            return ScratchValue.From(args[0].StringValue.Substring(args[1].Int32Value, args[2].Int32Value));
+        }
+
         [TypedAction("char-at", ScratchType.String, ScratchType.Int32)]
         public ScratchValue GetCharAt(ExecutionContext context, IList<ScratchValue> args)
         {
@@ -251,6 +263,31 @@ namespace Barrkel.ScratchPad
             if (pos < 0 || pos >= s.Length)
                 return ScratchValue.Null;
             return ScratchValue.From(s.Substring(pos, 1));
+        }
+
+        // This is also 'filter-lines' because null transformations will be filtered out
+        [TypedAction("transform-lines", ScratchType.String, ScratchType.ScratchFunction)]
+        public ScratchValue TransformLines(ExecutionContext context, IList<ScratchValue> args)
+        {
+            ScratchFunction func = args[1].FunctionValue;
+            return ScratchValue.From(string.Join("\n", args[0].StringValue.Split('\n')
+                .Select(x => func.Invoke(context, ScratchValue.List(x)))
+                .Where(x => !x.IsFalse)
+                .Select(x => x.StringValue)));
+        }
+
+        [TypedAction("sort-lines", ScratchType.String)]
+        public ScratchValue SortLines(ExecutionContext context, IList<ScratchValue> args)
+        {
+            // Consider case sensitivity, version sorting
+            return ScratchValue.From(string.Join("\n", args[0].StringValue.Split('\n')
+                .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)));
+        }
+
+        [TypedAction("reverse-lines", ScratchType.String)]
+        public ScratchValue ReverseLines(ExecutionContext context, IList<ScratchValue> args)
+        {
+            return ScratchValue.From(string.Join("\n", args[0].StringValue.Split('\n').Reverse()));
         }
 
         /****************************************************************************************************/
@@ -499,13 +536,244 @@ namespace Barrkel.ScratchPad
             ScratchScope settings = context.Scope;
             if (args.Count == 1)
             {
-                var childContext = context.CreateChild();
-                args[0].FunctionValue.Program.Run(childContext);
-                settings = childContext.Scope;
+                ValidateArgument("get-input", args, 0, ScratchType.ScratchFunction);
+                settings = EvaluateScratchScope(context, args[0].FunctionValue);
             }
             if (context.View.GetInput(settings, out string result))
                 return ScratchValue.From(result);
             return ScratchValue.Null;
+        }
+
+        /****************************************************************************************************/
+        // Snippet dialog
+        /****************************************************************************************************/
+
+        private ScratchScope EvaluateScratchScope(ExecutionContext context, ScratchFunction function)
+        {
+            ExecutionContext child = context.CreateChild();
+            function.Program.Run(context);
+            return child.Scope;
+        }
+
+        [TypedAction("launch-snippet", ScratchType.ScratchFunction)]
+        public void LaunchSnippet(ExecutionContext context, IList<ScratchValue> args)
+        {
+            context.View.LaunchSnippet(EvaluateScratchScope(context, args[0].FunctionValue));
+        }
+
+        /****************************************************************************************************/
+        // Search dialog
+        /****************************************************************************************************/
+
+        private const int DefaultContextLength = 40;
+
+        // Arg is regex to prefilter for.
+        // TODO: transform output
+        // TOOD: clean up context display
+        [TypedAction("search-current-page", ScratchType.String)]
+        public void SearchCurrentPage(ExecutionContext context, IList<ScratchValue> args)
+        {
+            Regex prefilter = new Regex(args[0].StringValue);
+            var lines = GetNonEmptyLines(context.View.CurrentText)
+                .Where(item => prefilter.IsMatch(item.Item2)).ToList();
+            if (context.View.RunSearch(pattern => FindMatchingLocations(lines, ParseRegexList(pattern, RegexOptions.Singleline)),
+                out var pair))
+            {
+                var (pos, len) = pair;
+                context.View.ScrollIntoView(pos);
+                context.View.Selection = (pos, pos + len);
+            }
+        }
+
+        // Given a list of (lineOffset, line) and a pattern, return UI-suitable strings with associated (offset, length) pairs.
+        static IEnumerable<(string, (int, int))> FindMatchingLocations(List<(int, string)> lines, List<Regex> regexes)
+        {
+            int count = 0;
+            int linum = 0;
+            // We cap at 1000 just in case caller doesn't limit us
+            while (count < 1000 && linum < lines.Count)
+            {
+                var (lineOfs, line) = lines[linum];
+                ++linum;
+
+                // Default case: empty pattern. Special case this one, we don't need to split every character.
+                if (regexes.Count == 0 || regexes[0].IsMatch(""))
+                {
+                    ++count;
+                    yield return (line, (lineOfs, 0));
+                    continue;
+                }
+
+                var matches = MatchRegexList(regexes, line);
+                if (matches.Count == 0)
+                {
+                    continue;
+                }
+                count += matches.Count;
+                // if multiple matches in a line, break them out
+                // if a single match, keep as is
+                string prefix = "";
+                if (matches.Count > 1)
+                {
+                    prefix = "   ";
+                    yield return (line, (lineOfs + matches[0].Start, matches[0].Length));
+                }
+                foreach (SimpleMatch match in matches)
+                {
+                    yield return (prefix + Contextualize(line, match), (lineOfs + match.Start, match.Length));
+                }
+            }
+        }
+
+        // Returns (lineOffset, line) without trailing line separators.
+        // lineOffset is the character offset of the start of the line in text.
+        static IEnumerable<(int, string)> GetNonEmptyLines(string text)
+        {
+            int pos = 0;
+            while (pos < text.Length)
+            {
+                char ch = text[pos];
+                int start = pos;
+                ++pos;
+                if (ch == '\n' || ch == '\r' || pos == text.Length)
+                    continue;
+
+                while (pos < text.Length)
+                {
+                    ch = text[pos];
+                    ++pos;
+                    if (ch == '\n' || ch == '\r')
+                        break;
+                }
+                yield return (start, text.Substring(start, pos - start - 1));
+            }
+        }
+
+        private bool AnyCaps(string value)
+        {
+            foreach (char ch in value)
+                if (char.IsUpper(ch))
+                    return true;
+            return false;
+        }
+
+        public List<Regex> ParseRegexList(string pattern, RegexOptions options)
+        {
+            if (!AnyCaps(pattern))
+                options |= RegexOptions.IgnoreCase;
+
+            Regex parsePart(string part)
+            {
+                if (part.StartsWith("*"))
+                    part = "\\" + part;
+                try
+                {
+                    return new Regex(part, options);
+                }
+                catch (ArgumentException)
+                {
+                    return new Regex(Regex.Escape(part), options);
+                }
+            }
+
+            return pattern.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(x => parsePart(x))
+                .ToList();
+        }
+
+        // Given a line and a match, add prefix and postfix text as necessary, and mark up match with [].
+        // This logic is sufficiently UI-specific that it should be factored out somehow.
+        static string Contextualize(string line, SimpleMatch match, int contextLength = DefaultContextLength)
+        {
+            StringBuilder result = new StringBuilder();
+            // ... preamble [match] postamble ...
+            if (match.Start > contextLength)
+            {
+                result.Append("...");
+                result.Append(line.Substring(match.Start - contextLength + 3, contextLength - 3));
+            }
+            else
+            {
+                result.Append(line.Substring(0, match.Start));
+            }
+            result.Append('[').Append(match.Value).Append(']');
+            if (match.End + contextLength < line.Length)
+            {
+                result.Append(line.Substring(match.End, contextLength - 3));
+                result.Append("...");
+            }
+            else
+            {
+                result.Append(line.Substring(match.End));
+            }
+            return result.ToString();
+        }
+
+        struct SimpleMatch
+        {
+            public SimpleMatch(string text, Match match)
+            {
+                Text = text;
+                if (!match.Success)
+                {
+                    Start = 0;
+                    End = -1;
+                }
+                else
+                {
+                    Start = match.Index;
+                    End = match.Index + match.Value.Length;
+                }
+            }
+
+            private SimpleMatch(string text, int start, int end)
+            {
+                Start = start;
+                End = end;
+                Text = text;
+            }
+
+            public SimpleMatch Extend(SimpleMatch other)
+            {
+                if (!object.ReferenceEquals(Text, other.Text))
+                    throw new ArgumentException("Extend may only be called with match over same text");
+                return new SimpleMatch(Text, Math.Min(Start, other.Start), Math.Max(End, other.End));
+            }
+
+            public int Start { get; }
+            public int End { get; }
+            public int Length => End - Start;
+            private string Text { get; }
+            public string Value => Text.Substring(Start, Length);
+            // We're not interested in 0-length matches
+            public bool Success => Length > 0;
+        }
+
+        private static List<SimpleMatch> MergeMatches(List<SimpleMatch> matches)
+        {
+            matches.Sort((a, b) => a.Start.CompareTo(b.Start));
+            List<SimpleMatch> result = new List<SimpleMatch>();
+            foreach (SimpleMatch m in matches)
+            {
+                if (result.Count == 0 || result[result.Count - 1].End < m.Start)
+                    result.Add(m);
+                else
+                    result[result.Count - 1] = result[result.Count - 1].Extend(m);
+            }
+            return result;
+        }
+
+        static List<SimpleMatch> MatchRegexList(List<Regex> regexes, string text)
+        {
+            var result = new List<SimpleMatch>();
+            foreach (Regex regex in regexes)
+            {
+                var matches = regex.Matches(text);
+                if (matches.Count == 0)
+                    return new List<SimpleMatch>();
+                result.AddRange(matches.Cast<Match>().Select(x => new SimpleMatch(text, x)));
+            }
+            return MergeMatches(result);
         }
 
         /****************************************************************************************************/

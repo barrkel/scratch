@@ -368,6 +368,9 @@ namespace Barrkel.ScratchPad
 		// Show an input dialog.
 		bool GetInput(ScratchScope settings, out string value);
 
+		// Show a non-modal snippet window.
+		void LaunchSnippet(ScratchScope settings);
+
 		// Before invoking cross-page navigation, call this.
 		void EnsureSaved();
 		// Jump to page by index in Book.
