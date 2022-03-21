@@ -21,7 +21,7 @@ namespace Barrkel.ScratchPad
 
 		public Options Options => Root.Options;
 
-        public ScratchScope RootScope { get; } = new ScratchScope();
+        public ScratchScope RootScope { get; }
 
 		public ScratchBookController GetControllerFor(ScratchBook book)
 		{
@@ -31,14 +31,13 @@ namespace Barrkel.ScratchPad
 			}
 			result = new ScratchBookController(this, book);
 			_controllerMap.Add(book, result);
-			RootScope.Load(LegacyLibrary.Instance);
-			RootScope.Load(ScratchLib.Instance);
 			return result;
 		}
 
 		public ScratchController(ScratchRoot root)
 		{
 			Root = root;
+			RootScope = (ScratchScope)root.RootScope;
 		}
 	}
 
@@ -61,7 +60,7 @@ namespace Barrkel.ScratchPad
 		{
 			Book = book;
 			RootController = rootController;
-			Scope = new ScratchScope(rootController.RootScope);
+			Scope = (ScratchScope)book.Scope;
 		}
 
 		public void ConnectView(IScratchBookView view)
@@ -87,7 +86,7 @@ namespace Barrkel.ScratchPad
 			{
 				try
 				{
-					action.Invoke(context, ScratchValue.EmptyList);
+					action.Invoke(key, context, ScratchValue.EmptyList);
 				}
 				catch (Exception ex)
 				{
@@ -103,14 +102,15 @@ namespace Barrkel.ScratchPad
 		{
 			ExecutionContext context = new ExecutionContext(this, view, Scope);
 			if (Scope.TryLookup(actionName, out var action))
-				action.Invoke(context, args);
+				action.Invoke(actionName, context, args);
 		}
 
 		public void InformEvent(IScratchBookView view, string eventName, IList<ScratchValue> args)
 		{
 			ExecutionContext context = new ExecutionContext(this, view, Scope);
-			if (Scope.TryLookup("on-" + eventName, out var action))
-				action.Invoke(context, args);
+			string eventMethod = $"on-{eventName}";
+			if (Scope.TryLookup(eventMethod, out var action))
+				action.Invoke(eventMethod, context, args);
 		}
 	}
 }

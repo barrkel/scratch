@@ -20,7 +20,7 @@ namespace ScratchLog
 			}
 			List<string> argList = new List<string>(args);
 			Options options = new Options(argList);
-			ScratchRoot root = new ScratchRoot(options, argList[0]);
+			ScratchRoot root = new ScratchRoot(options, argList[0], NullScope.Instance);
 			
 			var updates = new List<Update>();
 			

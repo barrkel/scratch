@@ -209,7 +209,7 @@ namespace Barrkel.ScratchPad
 			if (string.IsNullOrEmpty(textToPaste))
 				return;
 			if (context.Scope.TryLookup("paste-filter", out var pasteFilter))
-				textToPaste = pasteFilter.Invoke(context, new ScratchValue(textToPaste)).StringValue;
+				textToPaste = pasteFilter.Invoke("paste-filter", context, new ScratchValue(textToPaste)).StringValue;
 			string indent = GetCurrentIndent(context.View.CurrentText, context.View.CurrentPosition);
 			if (indent.Length > 0)
 				// Remove existing indent if pasted to an indent

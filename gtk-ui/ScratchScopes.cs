@@ -121,17 +121,6 @@ namespace Barrkel.ScratchPad
 			Bindings[name] = value;
 		}
 
-		protected void BindToAction(string name, string actionName)
-		{
-			Bind(name, MakeInvoke(actionName));
-		}
-
-		protected ScratchValue MakeInvoke(string name)
-		{
-			return new ScratchValue((context, _) =>
-					context.Scope.Lookup(name).Invoke(context, ScratchValue.EmptyList));
-		}
-
 		protected void ValidateLength(string method, IList<ScratchValue> args, int length)
 		{
 			if (args.Count != length)
@@ -159,19 +148,24 @@ namespace Barrkel.ScratchPad
 		}
 	}
 
-	public class ScratchScope : IScratchLibrary
+	public class ScratchScope : IScratchLibrary, IScratchScope
 	{
 		Dictionary<string, ScratchValue> _bindings = new Dictionary<string, ScratchValue>();
 
-		public ScratchScope()
+		private ScratchScope()
 		{
 			Name = "root";
 		}
 
-		public ScratchScope(ScratchScope parent)
+		private ScratchScope(ScratchScope parent, string name)
 		{
 			Parent = parent;
-			Name = "{}";
+			Name = name;
+		}
+
+		public static ScratchScope CreateRoot()
+		{
+			return new ScratchScope();
 		}
 
 		public string Name { get; }
@@ -250,6 +244,16 @@ namespace Barrkel.ScratchPad
 		IEnumerator IEnumerable.GetEnumerator()
 		{
 			return GetEnumerator();
+		}
+
+		IScratchScope IScratchScope.CreateChild(string name)
+		{
+			return CreateChild(name);
+		}
+
+		public ScratchScope CreateChild(string name)
+		{
+			return new ScratchScope(this, name);
 		}
 	}
 

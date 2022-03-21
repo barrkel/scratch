@@ -170,7 +170,7 @@ namespace Barrkel.ScratchPad
                 case ScratchType.ScratchFunction:
                     return ScratchValue.From(re.Replace(args[0].StringValue, match =>
                     {
-                        var child = context.CreateChild();
+                        var child = context.CreateChild("gsub/callback");
                         foreach (Group g in match.Groups)
                             child.Scope.AssignLocal(g.Name, ScratchValue.From(g.Value));
                         switch (replacement.FunctionValue.Parameters.Count)
@@ -271,7 +271,7 @@ namespace Barrkel.ScratchPad
         {
             ScratchFunction func = args[1].FunctionValue;
             return ScratchValue.From(string.Join("\n", args[0].StringValue.Split('\n')
-                .Select(x => func.Invoke(context, ScratchValue.List(x)))
+                .Select(x => func.Invoke("transform-lines/callback", context, ScratchValue.List(x)))
                 .Where(x => !x.IsFalse)
                 .Select(x => x.StringValue)));
         }
@@ -537,7 +537,7 @@ namespace Barrkel.ScratchPad
             if (args.Count == 1)
             {
                 ValidateArgument("get-input", args, 0, ScratchType.ScratchFunction);
-                settings = EvaluateScratchScope(context, args[0].FunctionValue);
+                settings = EvaluateScratchScope(context, args[0].FunctionValue, "get-input/callback");
             }
             if (context.View.GetInput(settings, out string result))
                 return ScratchValue.From(result);
@@ -548,9 +548,9 @@ namespace Barrkel.ScratchPad
         // Snippet dialog
         /****************************************************************************************************/
 
-        private ScratchScope EvaluateScratchScope(ExecutionContext context, ScratchFunction function)
+        private ScratchScope EvaluateScratchScope(ExecutionContext context, ScratchFunction function, string name)
         {
-            ExecutionContext child = context.CreateChild();
+            ExecutionContext child = context.CreateChild(name);
             function.Program.Run(context);
             return child.Scope;
         }
@@ -558,7 +558,7 @@ namespace Barrkel.ScratchPad
         [TypedAction("launch-snippet", ScratchType.ScratchFunction)]
         public void LaunchSnippet(ExecutionContext context, IList<ScratchValue> args)
         {
-            context.View.LaunchSnippet(EvaluateScratchScope(context, args[0].FunctionValue));
+            context.View.LaunchSnippet(EvaluateScratchScope(context, args[0].FunctionValue, "launch-snippet/callback"));
         }
 
         /****************************************************************************************************/

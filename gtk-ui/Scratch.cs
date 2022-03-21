@@ -20,6 +20,25 @@ namespace Barrkel.ScratchPad
 		}
 	}
 
+	public interface IScratchScope
+	{
+		IScratchScope CreateChild(string name);
+	}
+
+	public class NullScope : IScratchScope
+	{
+		public static readonly IScratchScope Instance = new NullScope();
+
+		private NullScope()
+		{
+		}
+
+		public IScratchScope CreateChild(string name)
+		{
+			return this;
+		}
+	}
+
 	public class Options
 	{
 		public Options(List<string> args)
@@ -38,8 +57,8 @@ namespace Barrkel.ScratchPad
 			return args.RemoveAll(arg => MatchFlag(arg, name)) > 0;
 		}
 
-		public bool DebugKeys;
-		public bool NormalizeFiles;
+		public bool DebugKeys { get; }
+		public bool NormalizeFiles { get; }
 	}
 
 	// The main root. Every directory in this directory is a tab on the main interface, like a separate
@@ -49,8 +68,9 @@ namespace Barrkel.ScratchPad
 	{
 		readonly List<ScratchBook> _books;
 
-		public ScratchRoot(Options options, string rootDirectory)
+		public ScratchRoot(Options options, string rootDirectory, IScratchScope rootScope)
 		{
+			RootScope = rootScope;
 			Options = options;
 			_books = new List<ScratchBook>();
 			Books = new ReadOnlyCollection<ScratchBook>(_books);
@@ -65,6 +85,8 @@ namespace Barrkel.ScratchPad
 		public string RootDirectory { get; }
 
 		public ReadOnlyCollection<ScratchBook> Books { get; }
+
+		public IScratchScope RootScope { get; }
 
 		public void SaveLatest()
 		{
@@ -167,8 +189,9 @@ namespace Barrkel.ScratchPad
 		public ScratchBook(ScratchRoot root, string rootDirectory)
 		{
 			Root = root;
-			Pages = new ReadOnlyCollection<ScratchPage>(_pages);
 			_rootDirectory = rootDirectory;
+			Scope = root.RootScope.CreateChild(Name);
+			Pages = new ReadOnlyCollection<ScratchPage>(_pages);
 			var rootDir = new DirectoryInfo(rootDirectory);
 			TitleCache = new LineCache(Path.Combine(_rootDirectory, "title_cache.text"));
 			_pages.AddRange(rootDir.GetFiles("*.txt")
@@ -180,6 +203,8 @@ namespace Barrkel.ScratchPad
 		}
 
 		public ScratchRoot Root { get; }
+
+		public IScratchScope Scope { get; }
 
 		internal LineCache TitleCache { get; }
 

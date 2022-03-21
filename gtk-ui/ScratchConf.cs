@@ -60,9 +60,9 @@ namespace Barrkel.ScratchPad
 				throw new InvalidOperationException("Execution stack too deep");
 		}
 
-		public ExecutionContext CreateChild()
+		public ExecutionContext CreateChild(string name)
 		{
-			return new ExecutionContext(this, new ScratchScope(Scope));
+			return new ExecutionContext(this, Scope.CreateChild(name));
 		}
 
 		private GlobalContext Context { get; }
@@ -92,9 +92,9 @@ namespace Barrkel.ScratchPad
 		public ReadOnlyCollection<string> Parameters { get; }
 		public ScratchProgram Program { get; }
 
-		public ScratchValue Invoke(ExecutionContext context, IList<ScratchValue> args)
+		public ScratchValue Invoke(string name, ExecutionContext context, IList<ScratchValue> args)
 		{
-			ExecutionContext child = context.CreateChild();
+			ExecutionContext child = context.CreateChild(name);
 			if (args.Count != Parameters.Count)
 				throw new InvalidOperationException(
 					$"Parameter count mismatch: expected {Parameters.Count}, got {args.Count}");
@@ -209,12 +209,12 @@ namespace Barrkel.ScratchPad
 		public bool IsFalse => Type == ScratchType.Null;
 		public object ObjectValue => _value;
 
-		public ScratchValue Invoke(ExecutionContext context, params ScratchValue[] args)
+		public ScratchValue Invoke(string name, ExecutionContext context, params ScratchValue[] args)
 		{
-			return Invoke(context, (IList<ScratchValue>)args);
+			return Invoke(name, context, (IList<ScratchValue>)args);
 		}
 
-		public ScratchValue Invoke(ExecutionContext context, IList<ScratchValue> args)
+		public ScratchValue Invoke(string name, ExecutionContext context, IList<ScratchValue> args)
 		{
 			switch (Type)
 			{
@@ -222,12 +222,12 @@ namespace Barrkel.ScratchPad
 					return ScratchValue.From(((ScratchAction)_value)(context, args));
 
 				case ScratchType.ScratchFunction:
-					return ((ScratchFunction)_value).Invoke(context, args);
+					return ((ScratchFunction)_value).Invoke(name, context, args);
 
 				// invoking a string binding invokes whatever the string is itself bound to, recursively
 				// this lets us use strings as function pointers, as long as we don't mind naming our functions
 				case ScratchType.String:
-					return context.Scope.Lookup(StringValue).Invoke(context, args);
+					return context.Scope.Lookup(StringValue).Invoke($"{name}->{StringValue}", context, args);
 
 				default:
 					throw new InvalidOperationException("Tried to invoke non-function: " + this);
@@ -502,7 +502,8 @@ namespace Barrkel.ScratchPad
 						break;
 
 					case Operation.Call:
-						stack.Add(context.Scope.Lookup(_ops[cp].ArgAsString).Invoke(context, PopArgList(stack)));
+						stack.Add(context.Scope.Lookup(_ops[cp].ArgAsString)
+							.Invoke(_ops[cp].ArgAsString, context, PopArgList(stack)));
 						break;
 
 					case Operation.Not:

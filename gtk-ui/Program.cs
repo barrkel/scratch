@@ -67,7 +67,13 @@ namespace Barrkel.GtkScratchPad
 				NormalizeLineEndings(new DirectoryInfo(args[0]));
 			}
 
-			ScratchRoot root = new ScratchRoot(options, args[0]);
+			ScratchScope rootScope = ScratchScope.CreateRoot();
+			// TODO: load root scope up with config nice and early
+
+			rootScope.Load(LegacyLibrary.Instance);
+			rootScope.Load(ScratchLib.Instance);
+
+			ScratchRoot root = new ScratchRoot(options, args[0], rootScope);
 			MainWindow window = new MainWindow(root, settings);
 			window.ShowAll();
 			
