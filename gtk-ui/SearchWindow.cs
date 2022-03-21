@@ -140,10 +140,10 @@ namespace Barrkel.GtkScratchPad
 		TreeViewColumn _valueColumn;
 		int _searchResultsStoreCount; // asinine results store
 		
-		SearchWindow(SearchFunc searchFunc, Settings appSettings) : base("ScratchPad")
+		SearchWindow(SearchFunc searchFunc, ScratchScope settings) : base("ScratchPad")
 		{
 			SearchFunc = searchFunc;
-			AppSettings = appSettings;
+			AppSettings = settings;
 			InitComponent();
 		}
 
@@ -152,7 +152,7 @@ namespace Barrkel.GtkScratchPad
 			return text => generic(text).Select(x => (x.Item1, (object)x.Item2));
 		}
 		
-		public static bool RunSearch<T>(Window parent, SearchFunc<T> searchFunc, Settings settings, out T result)
+		public static bool RunSearch<T>(Window parent, SearchFunc<T> searchFunc, ScratchScope settings, out T result)
 		{
 			using (SearchWindow window = new SearchWindow(Polymorphize(searchFunc), settings))
 			{
@@ -174,7 +174,7 @@ namespace Barrkel.GtkScratchPad
 			}
 		}
 		
-		public Settings AppSettings { get; private set; }
+		public ScratchScope AppSettings { get; private set; }
 		SearchFunc SearchFunc { get; set; }
 		
 		private void InitComponent()
@@ -185,8 +185,8 @@ namespace Barrkel.GtkScratchPad
 
 			Gdk.Color grey = new Gdk.Color(0xA0, 0xA0, 0xA0);
 			Gdk.Color lightBlue = new Gdk.Color(207, 207, 239);
-			var infoFont = Pango.FontDescription.FromString(AppSettings.Get("info-font", "Verdana"));
-			var textFont = Pango.FontDescription.FromString(AppSettings.Get("text-font", "Courier New"));
+			var infoFont = Pango.FontDescription.FromString(AppSettings.GetOrDefault("info-font", "Verdana"));
+			var textFont = Pango.FontDescription.FromString(AppSettings.GetOrDefault("text-font", "Courier New"));
 			
 			_searchTextView = new TextView();
 			_searchTextView.ModifyBase(StateType.Normal, lightBlue);

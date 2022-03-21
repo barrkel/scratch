@@ -11,15 +11,13 @@ namespace Barrkel.GtkScratchPad
 	{
 		Notebook _notebook;
 		
-		public MainWindow(ScratchRoot root, Settings appSettings) : base("GTK ScratchPad")
+		public MainWindow(ScratchRoot root) : base("GTK ScratchPad")
 		{
 			Root = root;
-			AppSettings = appSettings;
 			RootController = new ScratchRootController(Root);
 			InitComponent();
 		}
 		
-		public Settings AppSettings { get; }
 		public ScratchRoot Root { get; }
 		public ScratchRootController RootController { get; }
 		
@@ -33,11 +31,11 @@ namespace Barrkel.GtkScratchPad
 			foreach (var book in Root.Books)
 			{
 				ScratchBookController controller = RootController.GetControllerFor(book);
-				BookView view = new BookView(book, controller, AppSettings, this);
+				BookView view = new BookView(book, controller, this);
 				views.Add(view);
 				_notebook.AppendPage(view, CreateTabLabel(book.Name));
 			}
-			var logView = new LogView(AppSettings, this);
+			var logView = new LogView(RootController.RootScope, this);
 			_notebook.AppendPage(logView, CreateTabLabel("log"));
 			Log.Handler = logView.AppendLine;
 

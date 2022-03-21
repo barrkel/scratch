@@ -160,9 +160,8 @@ namespace Barrkel.GtkScratchPad
 		Label _versionLabel;
 		List<System.Action> _deferred = new List<System.Action>();
 
-		public BookView(ScratchBook book, ScratchBookController controller, Settings appSettings, Window appWindow)
+		public BookView(ScratchBook book, ScratchBookController controller, Window appWindow)
 		{
-			AppSettings = appSettings;
 			AppWindow = appWindow;
 			Book = book;
 			InitComponent();
@@ -170,13 +169,14 @@ namespace Barrkel.GtkScratchPad
 			Controller = controller;
 			UpdateViewLabels();
 			UpdateTextBox();
+			Settings = controller.Scope;
 
 			Controller.ConnectView(this);
 		}
 
 		public ScratchBookController Controller { get; }
 		public Window AppWindow { get; private set; }
-		public Settings AppSettings { get; private set; }
+		public ScratchScope Settings { get; }
 		
 		private void UpdateTextBox()
 		{
@@ -280,9 +280,9 @@ namespace Barrkel.GtkScratchPad
 		{
 			Gdk.Color grey = new Gdk.Color(0xA0, 0xA0, 0xA0);
 			Gdk.Color lightBlue = new Gdk.Color(207, 207, 239);
-			// TODO: load these settings from a config page
-			var infoFont = Pango.FontDescription.FromString(AppSettings.Get("info-font", "Verdana"));
-			var textFont = Pango.FontDescription.FromString(AppSettings.Get("text-font", "Courier New"));
+
+			var infoFont = Pango.FontDescription.FromString(Controller.Scope.GetOrDefault("info-font", "Verdana"));
+			var textFont = Pango.FontDescription.FromString(Controller.Scope.GetOrDefault("text-font", "Courier New"));
 
 			_textView = new MyTextView
 			{
@@ -663,7 +663,7 @@ namespace Barrkel.GtkScratchPad
 
 		public bool RunSearch<T>(ScratchPad.SearchFunc<T> searchFunc, out T result)
 		{
-			return SearchWindow.RunSearch(AppWindow, searchFunc.Invoke, AppSettings, out result);
+			return SearchWindow.RunSearch(AppWindow, searchFunc.Invoke, Settings, out result);
 		}
 
 		public bool GetInput(ScratchScope settings, out string value)

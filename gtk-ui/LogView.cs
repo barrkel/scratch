@@ -15,21 +15,22 @@ namespace Barrkel.GtkScratchPad
 		TextView _textView;
 		int _length;
 
-		public LogView(Settings appSettings, Window appWindow)
+		public LogView(ScratchScope settings, Window appWindow)
 		{
-			AppSettings = appSettings;
+			AppSettings = settings;
 			AppWindow = appWindow;
 			InitComponent();
 		}
 
 		public Window AppWindow { get; private set; }
-		public Settings AppSettings { get; private set; }
+		public ScratchScope AppSettings { get; private set; }
 		
 		private void InitComponent()
 		{
 			Gdk.Color grey = new Gdk.Color(0xF0, 0xF0, 0xF0);
-			// TODO: load these settings from a config page
-			var textFont = Pango.FontDescription.FromString(AppSettings.Get("text-font", "Courier New"));
+			var textFont = Pango.FontDescription.FromString(AppSettings.GetOrDefault("log-font", null));
+			if (textFont == null)
+				textFont = Pango.FontDescription.FromString(AppSettings.GetOrDefault("text-font", "Courier New"));
 
 			_textView = new MyTextView
 			{
