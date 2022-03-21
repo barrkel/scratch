@@ -43,7 +43,6 @@ namespace Barrkel.ScratchPad
 	{
 		public Options(List<string> args)
 		{
-			DebugKeys = ParseFlag(args, "debug-keys");
 			NormalizeFiles = ParseFlag(args, "normalize");
 		}
 
@@ -57,7 +56,6 @@ namespace Barrkel.ScratchPad
 			return args.RemoveAll(arg => MatchFlag(arg, name)) > 0;
 		}
 
-		public bool DebugKeys { get; }
 		public bool NormalizeFiles { get; }
 	}
 

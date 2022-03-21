@@ -387,7 +387,8 @@ namespace Barrkel.GtkScratchPad
 			}
 			else 
 			{
-				Log.Out($"Not mapped: {evnt.Key}");
+				if (Controller.Scope.GetOrDefault("debug-keys", false))
+					Log.Out($"Not mapped: {evnt.Key}");
 			}
 
 			var state = evnt.State & Gdk.ModifierType.Mod1Mask;

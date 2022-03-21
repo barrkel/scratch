@@ -79,7 +79,7 @@ namespace Barrkel.ScratchPad
 
 			ExecutionContext context = new ExecutionContext(this, view, Scope);
 
-			if (RootController.Options.DebugKeys)
+			if (Scope.GetOrDefault("debug-keys", false))
 				Log.Out($"debug-keys: {key}");
 
 			if (Scope.TryLookup(key, out var action))

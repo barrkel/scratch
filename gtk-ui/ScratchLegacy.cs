@@ -162,6 +162,12 @@ namespace Barrkel.ScratchPad
 			Log.Out(string.Join(" ", args));
 		}
 
+		[VariadicAction("log")]
+		public void DoLog(ExecutionContext context, IList<ScratchValue> args)
+		{
+			Log.Out(string.Join("", args.Select(x => "" + x.ObjectValue)));
+		}
+
 		[TypedAction("insert-date")]
 		public void DoInsertDate(ExecutionContext context, IList<ScratchValue> args)
 		{
@@ -658,7 +664,8 @@ namespace Barrkel.ScratchPad
 			GetTextCompletions(text, test, add);
 			GetTitleCompletions(book, test, add);
 
-			result.ForEach(Log.Out);
+			if (((ScratchScope)book.Scope).GetOrDefault("debug-completion", false))
+				result.ForEach(Log.Out);
 			return result;
 		}
 

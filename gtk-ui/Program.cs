@@ -76,7 +76,7 @@ namespace Barrkel.GtkScratchPad
 
 			MainWindow window = new MainWindow(root, settings);
 			window.ShowAll();
-			
+
 			Application.Run();
 			return 0;
 		}

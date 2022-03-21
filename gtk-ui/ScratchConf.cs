@@ -251,7 +251,8 @@ namespace Barrkel.ScratchPad
 	// Basic stack machine straight from parser.
 	public class ScratchProgram
 	{
-		public static readonly bool DebugStack = false;
+		// Set by debug-stack(x) where x > 0
+		public static bool DebugStack = false;
 
 		public enum Operation
 		{
@@ -533,6 +534,8 @@ namespace Barrkel.ScratchPad
 
 	public class ConfigFileLibrary : ScratchLibraryBase
 	{
+		public static bool DebugBinding = false;
+
 		private ConfigFileLibrary(string name) : base(name)
 		{
 		}
@@ -589,7 +592,8 @@ namespace Barrkel.ScratchPad
 					lexer.Eat(ScopeToken.Eq);
 					var value = ParseSettingValue(lexer);
 					result.Bindings.Add(ident, value);
-					Log.Out($"Bound {ident} to {value}");
+					if (DebugBinding)
+						Log.Out($"Bound {ident} to {value}");
 				}
 
 				return result;

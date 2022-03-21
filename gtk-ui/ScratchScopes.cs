@@ -234,6 +234,13 @@ namespace Barrkel.ScratchPad
 			return defaultValue;
 		}
 
+		public bool GetOrDefault(string name, bool defaultValue)
+		{
+			if (TryLookup(name, out var result))
+				return result.Type != ScratchType.Null;
+			return defaultValue;
+		}
+
 		public int GetOrDefault(string name, int defaultValue)
 		{
 			if (TryLookup(name, out var result) && result.Type == ScratchType.Int32)

@@ -777,6 +777,22 @@ namespace Barrkel.ScratchPad
         }
 
         /****************************************************************************************************/
+        // Diagnostics
+        /****************************************************************************************************/
+
+        [TypedAction("debug-stack", ScratchType.Int32)]
+        public void DebugStack(ExecutionContext context, IList<ScratchValue> args)
+        {
+            ScratchProgram.DebugStack = args[0].Int32Value > 0;
+        }
+
+        [TypedAction("debug-binding", ScratchType.Int32)]
+        public void DebugBinding(ExecutionContext context, IList<ScratchValue> args)
+        {
+            ConfigFileLibrary.DebugBinding = args[0].Int32Value > 0;
+        }
+
+        /****************************************************************************************************/
         // Obsolete actions
         /****************************************************************************************************/
 
