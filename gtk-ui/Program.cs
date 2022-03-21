@@ -68,12 +68,12 @@ namespace Barrkel.GtkScratchPad
 			}
 
 			ScratchScope rootScope = ScratchScope.CreateRoot();
-			// TODO: load root scope up with config nice and early
-
 			rootScope.Load(LegacyLibrary.Instance);
 			rootScope.Load(ScratchLib.Instance);
 
 			ScratchRoot root = new ScratchRoot(options, args[0], rootScope);
+			LegacyLibrary.Instance.LoadConfig(root);
+
 			MainWindow window = new MainWindow(root, settings);
 			window.ShowAll();
 			

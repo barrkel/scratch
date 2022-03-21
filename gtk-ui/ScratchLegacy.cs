@@ -55,16 +55,9 @@ namespace Barrkel.ScratchPad
 			}
 		}
 
-		[TypedAction("load-config")]
-		public void LoadConfig(ExecutionContext context, IList<ScratchValue> args)
+		public void LoadConfig(ScratchRoot root)
 		{
-			context.View.EnsureSaved();
-			// TODO: consider load vs reload
-			// TODO: consider adding unpersisted view-only page type for errors
-
 			// Load global configs first
-			var rootController = context.Controller.RootController;
-			var root = rootController.Root;
 			foreach (var book in root.Books)
 			{
 				foreach (var (title, index) in book.SearchTitles(new Regex(@"^\.globalconfig\b.*")))
@@ -72,12 +65,11 @@ namespace Barrkel.ScratchPad
 					var library = ConfigFileLibrary.Load(title, book.Pages[index].Text);
 					try
 					{
-						rootController.RootScope.Load(library);
+						((ScratchScope) root.RootScope).Load(library);
 					}
 					catch (Exception ex)
 					{
-						// it's ugly but it should work
-						context.View.InsertText(ex.Message);
+						Log.Out(ex.Message);
 					}
 				}
 			}
@@ -88,14 +80,22 @@ namespace Barrkel.ScratchPad
 					var library = ConfigFileLibrary.Load(title, book.Pages[index].Text);
 					try
 					{
-						rootController.GetControllerFor(book).Scope.Load(library);
+						((ScratchScope)book.Scope).Load(library);
 					}
 					catch (Exception ex)
 					{
-						context.View.InsertText(ex.Message);
+						Log.Out(ex.Message);
 					}
 				}
 			}
+		}
+
+		[TypedAction("load-config")]
+		public void DoLoadConfig(ExecutionContext context, IList<ScratchValue> args)
+		{
+			context.View.EnsureSaved();
+			// TODO: consider load vs reload
+			LoadConfig(context.Controller.RootController.Root);
 		}
 
 		[TypedAction("get-cursor-text-re", ScratchType.String)]

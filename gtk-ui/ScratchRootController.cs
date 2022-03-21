@@ -13,7 +13,7 @@ namespace Barrkel.ScratchPad
 	// Controller for behaviour. UI should receive this and send keystrokes and events to it, along with view callbacks.
 	// The view should be updated via the callbacks.
 	// Much of it is stringly typed for a dynamically bound future.
-	public class ScratchController
+	public class ScratchRootController
 	{
 		Dictionary<ScratchBook, ScratchBookController> _controllerMap = new Dictionary<ScratchBook, ScratchBookController>();
 
@@ -34,7 +34,7 @@ namespace Barrkel.ScratchPad
 			return result;
 		}
 
-		public ScratchController(ScratchRoot root)
+		public ScratchRootController(ScratchRoot root)
 		{
 			Root = root;
 			RootScope = (ScratchScope)root.RootScope;
@@ -53,10 +53,10 @@ namespace Barrkel.ScratchPad
 		// TODO: lightweight scripting for composing new actions
 
 		public ScratchBook Book { get; }
-		public ScratchController RootController { get; }
+		public ScratchRootController RootController { get; }
 		public ScratchScope Scope { get; }
 
-		public ScratchBookController(ScratchController rootController, ScratchBook book)
+		public ScratchBookController(ScratchRootController rootController, ScratchBook book)
 		{
 			Book = book;
 			RootController = rootController;

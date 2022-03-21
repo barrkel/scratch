@@ -15,13 +15,13 @@ namespace Barrkel.GtkScratchPad
 		{
 			Root = root;
 			AppSettings = appSettings;
-			RootController = new ScratchController(Root);
+			RootController = new ScratchRootController(Root);
 			InitComponent();
 		}
 		
 		public Settings AppSettings { get; }
 		public ScratchRoot Root { get; }
-		public ScratchController RootController { get; }
+		public ScratchRootController RootController { get; }
 		
 		private void InitComponent()
 		{
