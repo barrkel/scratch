@@ -16,6 +16,55 @@ namespace Barrkel.ScratchPad
         }
 
         /****************************************************************************************************/
+        // Config and initialization
+        /****************************************************************************************************/
+
+        public void LoadConfig(ScratchRoot root)
+        {
+            // Load global configs first
+            foreach (var book in root.Books)
+            {
+                foreach (var (title, index) in book.SearchTitles(new Regex(@"^\.globalconfig\b.*")))
+                {
+                    var library = ConfigFileLibrary.Load(title, book.Pages[index].Text);
+                    try
+                    {
+                        ((ScratchScope)root.RootScope).Load(library);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Out(ex.Message);
+                    }
+                }
+            }
+            foreach (var book in root.Books)
+            {
+                foreach (var (title, index) in book.SearchTitles(new Regex(@"^\.config\b.*")))
+                {
+                    var library = ConfigFileLibrary.Load(title, book.Pages[index].Text);
+                    try
+                    {
+                        ((ScratchScope)book.Scope).Load(library);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Out(ex.Message);
+                    }
+                }
+            }
+        }
+
+        [TypedAction("load-config")]
+        public void DoLoadConfig(ExecutionContext context, IList<ScratchValue> args)
+        {
+            context.View.EnsureSaved();
+            // TODO: consider load vs reload
+            LoadConfig(context.Controller.RootController.Root);
+            Log.Out("Config reloaded.");
+
+        }
+
+        /****************************************************************************************************/
         // Meta
         /****************************************************************************************************/
 

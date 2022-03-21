@@ -28,9 +28,10 @@ namespace Barrkel.GtkScratchPad
 		private void InitComponent()
 		{
 			Gdk.Color grey = new Gdk.Color(0xF0, 0xF0, 0xF0);
-			var textFont = Pango.FontDescription.FromString(AppSettings.GetOrDefault("log-font", null));
-			if (textFont == null)
-				textFont = Pango.FontDescription.FromString(AppSettings.GetOrDefault("text-font", "Courier New"));
+			var textFontName = AppSettings.GetOrDefault("log-font", null);
+			if (textFontName == null)
+				textFontName = AppSettings.GetOrDefault("text-font", "Courier New");
+			var textFont = Pango.FontDescription.FromString(textFontName);
 
 			_textView = new MyTextView
 			{

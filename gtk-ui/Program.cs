@@ -64,7 +64,7 @@ namespace Barrkel.GtkScratchPad
 			rootScope.Load(ScratchLib.Instance);
 
 			ScratchRoot root = new ScratchRoot(options, args[0], rootScope);
-			LegacyLibrary.Instance.LoadConfig(root);
+			ScratchLib.Instance.LoadConfig(root);
 
 			MainWindow window = new MainWindow(root);
 			window.ShowAll();

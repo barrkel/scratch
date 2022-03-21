@@ -164,19 +164,19 @@ namespace Barrkel.GtkScratchPad
 		{
 			AppWindow = appWindow;
 			Book = book;
+			Controller = controller;
+			AppSettings = controller.Scope;
 			InitComponent();
 			_currentPage = book.Pages.Count > 0 ? book.Pages.Count - 1 : 0;
-			Controller = controller;
 			UpdateViewLabels();
 			UpdateTextBox();
-			Settings = controller.Scope;
 
 			Controller.ConnectView(this);
 		}
 
 		public ScratchBookController Controller { get; }
 		public Window AppWindow { get; private set; }
-		public ScratchScope Settings { get; }
+		public ScratchScope AppSettings { get; }
 		
 		private void UpdateTextBox()
 		{
@@ -275,11 +275,15 @@ namespace Barrkel.GtkScratchPad
 		{
 			return string.Format("<span font='11'>{0}</span>", info.EscapeMarkup());
 		}
-	
+
+		private static readonly Gdk.Color LightBlue = new Gdk.Color(207, 207, 239);
+
 		private void InitComponent()
 		{
 			Gdk.Color grey = new Gdk.Color(0xA0, 0xA0, 0xA0);
-			Gdk.Color lightBlue = new Gdk.Color(207, 207, 239);
+			Gdk.Color noteBackground = LightBlue;
+			if (!Gdk.Color.Parse(AppSettings.GetOrDefault("background-color", "#cfcfef"), ref noteBackground))
+				noteBackground = LightBlue;
 
 			var infoFont = Pango.FontDescription.FromString(Controller.Scope.GetOrDefault("info-font", "Verdana"));
 			var textFont = Pango.FontDescription.FromString(Controller.Scope.GetOrDefault("text-font", "Courier New"));
@@ -288,7 +292,7 @@ namespace Barrkel.GtkScratchPad
 			{
 				WrapMode = WrapMode.Word
 			};
-			_textView.ModifyBase(StateType.Normal, lightBlue);
+			_textView.ModifyBase(StateType.Normal, noteBackground);
 			_textView.Buffer.Changed += _text_TextChanged;
 			_textView.KeyDownEvent += _textView_KeyDownEvent;
 			_textView.ModifyFont(textFont);
@@ -663,7 +667,7 @@ namespace Barrkel.GtkScratchPad
 
 		public bool RunSearch<T>(ScratchPad.SearchFunc<T> searchFunc, out T result)
 		{
-			return SearchWindow.RunSearch(AppWindow, searchFunc.Invoke, Settings, out result);
+			return SearchWindow.RunSearch(AppWindow, searchFunc.Invoke, AppSettings, out result);
 		}
 
 		public bool GetInput(ScratchScope settings, out string value)
