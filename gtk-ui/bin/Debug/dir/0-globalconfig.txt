@@ -1,0 +1,255 @@
+.globalconfig Default Global Config
+
+# Do not modify this file since it may be overwritten without notice.
+
+# Reset this config with reset-config
+C-M-R = reset-config
+
+####################################################################################################
+# UI config
+####################################################################################################
+text-font = "Consolas, 9"
+info-font = "Verdana, 12"
+log-font = "Consolas, 8"
+
+get-input-number = { |current|
+  result = nil
+  while !result {
+    current = get-input-text(current)
+    if !current {
+      return nil
+    }
+    result = to-int(current)
+  }
+  result
+}
+
+get-input-text = { |current|
+  get-input({
+    init-text := current
+  })
+}
+
+show-snippet = { |snippet-text|
+  launch-snippet({
+    text := snippet-text
+    snippet-color := '#FFFFC0'
+  })
+}
+
+F1 = {
+  sel := get-view-selected-text()
+  if sel && ne(sel, '') {
+    title := get-input-text("Snippet")
+    launch-snippet({
+      text := sel
+      snippet-color := '#FFFFC0'
+    })
+  }
+}
+
+"M-S-Up" = { goto-previous-major-version(300) }
+"M-S-Down" = { goto-next-major-version(300) }
+
+####################################################################################################
+# Available Functions
+####################################################################################################
+// is-defined(symbol: string): bool
+// length(string): int
+// to-int(string): int
+// to-str(int): string
+// gsub(text, regex, replacement: string): string
+// match-re(text, regex: string): string
+// concat(...): string
+// format(string, ...): string
+// get-string-from-to(string, int, int): string
+// char-at(string, int): string
+/// Get all whitespace from text[pos] up to text[max] or non-whitespace
+// get-whitespace(text: string; pos, max: int): string
+// reset-indent(text: string): string
+// add-indent(text, indent: string): string
+// insert-text(...)
+// get-clipboard(): string
+// get-view-text(): string
+// get-view-pos(): int
+// set-view-pos(int)
+// get-line-start(text: string, pos: int): int
+// get-line-end(text: string, pos: int): int
+// get-view-selected-text(): string
+// set-view-selected-text(text: string)
+// set-view-selection(from, to: int)
+// scroll-pos-into-view(pos: int)
+/// closure can set
+///   init-text
+// get-input([closure]): string
+// get-line-ident(string, position)
+
+get-line-indent = { |text, pos|
+  get-whitespace(text, get-line-start(text, pos), pos)
+}
+
+replace-command = {
+  sel := get-view-selected-text()
+  if !sel || eq(sel, '') { return }
+  foo := get-input-text('Regex')
+  if !foo { return }
+  dst := get-input-text('Replacement')
+  if !dst { return }
+  ensure-saved()
+  set-view-selected-text(gsub(sel, foo, dst))
+}
+
+M-r = replace-command
+
+C-o = launch-url
+
+launch-url = {
+  value := get-cursor-text-re("\S+")
+  if !value { return }
+  if !is-url(value) { return }
+  open(value)
+}
+
+is-url = { |text|
+  match-re(text, "^https?://\S+$")
+}
+
+str-n = { |text, count|
+  result := ""
+  while gt(count, 0) {
+    result = concat(result, text)
+    count = sub(count, 1)
+  }
+  result
+}
+
+insert-n = { |text, count|
+  insert-text(str-n(text, count))
+}
+
+// https://www.google.com/
+
+// something else
+
+goto-prev-line-end = {
+  text := get-view-text()
+  line-start := get-line-start(text, get-view-pos())
+  prev-line-end := sub(line-start, 1)
+  if ge(prev-line-end, 0) {
+    set-view-pos(prev-line-end)
+  }
+}
+
+goto-eol2 = {
+  set-view-pos(
+    get-line-end(
+      get-view-text(), 
+      get-view-pos()))
+}
+
+goto-sol2 = {
+  set-view-pos(
+    get-line-start(
+      get-view-text(), 
+      get-view-pos()))
+}
+C-a = goto-sol2
+C-e = goto-eol2
+
+NEWLINE = '
+'
+
+insert-line = { |text|
+  insert-text(concat(text, NEWLINE))
+}
+
+get-current-line-text = {
+  text := get-view-text()
+  pos := get-view-pos()
+  sol := get-line-start(text, pos)
+  eol = get-line-end(text, pos)
+  if le(eol, sol) { return }
+
+  get-string-from-to(text, sol, eol)
+}
+
+
+cut-current-line-text = {
+  text := get-view-text()
+  pos := get-view-pos()
+  sol := get-line-start(text, pos)
+  eol = get-line-end(text, pos)
+  if le(eol, sol) { return }
+  set-view-selection(sol, eol)
+  result := get-view-selected-text()
+  set-view-selected-text('')
+  result
+}
+
+insert-header = { |char, count|
+  header := cut-current-line-text()
+  line := str-n(char, count)
+  insert-line(line)
+  insert-line(format("{0} ", char))
+  insert-line(line)
+  goto-prev-line-end()
+  goto-prev-line-end()
+  if header {
+    insert-text(header)
+  }
+}
+
+"C-!" = { insert-header('#', 100) }
+"C-@" = { insert-header('*', 90) }
+"C-#" = { insert-header('-', 80) }
+
+goto-prev-para = {
+  text := get-view-text()
+  pos := get-view-pos()
+  sol := get-line-start(text, pos)
+  // go to previous line if we are at start of current line
+  if eq(pos, sol) {
+    pos := sub(pos, 1)
+  }
+  while gt(pos, 0) {
+    pos := get-line-start(text, pos)
+    eol := get-line-end(text, pos)
+    if eq(pos, eol) {
+      // blank line
+      break
+    }
+    pos := sub(pos, 1)
+  }
+  if gt(pos, 0) {
+    // set-view-pos(pos)
+    set-view-selection(pos, add(pos, 1))
+    scroll-pos-into-view(pos)
+  }
+}
+
+goto-next-para = {
+  text := get-view-text()
+  eof := length(text)
+  pos := get-view-pos()
+  eol := get-line-end(text, pos)
+  // go to next line if we are at end of current line
+  if eq(pos, eol) {
+    pos := add(pos, 1)
+  }
+  while lt(pos, eof) {
+    pos := get-line-start(text, pos)
+    eol := get-line-end(text, pos)
+    if eq(pos, eol) {
+      // blank line
+      break
+    }
+    pos := add(eol, 1)
+  }
+  // set-view-pos(pos)
+  set-view-selection(pos, add(pos, 1))
+  scroll-pos-into-view(pos)
+}
+
+C-Up = { goto-prev-para() }
+C-Down = { goto-next-para() }
+

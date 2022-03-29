@@ -1,6 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -30,6 +31,11 @@ namespace Barrkel.ScratchPad
 
         public void LoadConfig(ScratchRoot root)
         {
+            // Reset global config if missing
+            string path = Path.Combine(root.RootDirectory, "0-globalconfig.txt");
+            if (!File.Exists(path))
+                File.WriteAllText(path, GtkScratchPad.Resources.globalconfig);
+
             // Load global configs first
             foreach (var (book, title, index) in FindConfigs(root, @"^\.globalconfig\b.*"))
             {
@@ -64,7 +70,15 @@ namespace Barrkel.ScratchPad
             // TODO: consider load vs reload
             LoadConfig(context.Controller.RootController.Root);
             Log.Out("Config reloaded.");
+        }
 
+        [TypedAction("reset-config")]
+        public void ResetConfig(ExecutionContext context, IList<ScratchValue> args)
+        {
+            ScratchRoot root = context.Controller.RootController.Root;
+            string path = Path.Combine(root.RootDirectory, "0-globalconfig.txt");
+            File.WriteAllText(path, GtkScratchPad.Resources.globalconfig);
+            Log.Out($"{path} written.");
         }
 
         /****************************************************************************************************/
