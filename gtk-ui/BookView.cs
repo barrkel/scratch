@@ -460,41 +460,35 @@ namespace Barrkel.GtkScratchPad
 			return true;
 		}
 
-		void PreviousVersion()
+		public bool Navigate(Func<ScratchIterator,bool> callback)
 		{
 			EnsureSaved();
 			if (_currentPage >= Book.Pages.Count)
-				return;
+				return false;
 			if (_currentIterator == null)
 			{
 				_currentIterator = Book.Pages[_currentPage].GetIterator();
 				_currentIterator.MoveToEnd();
 			}
-			if (_currentIterator.MovePrevious())
+			if (callback(_currentIterator))
 			{
 				UpdateTextBox();
 				SetSelection(_currentIterator.UpdatedFrom, _currentIterator.UpdatedTo);
-				// This scroll needs to be deferred to the idle loop
-				// the UI hasn't updated yet and the scroll command is effectively discarded
 				ScrollIntoView(_currentIterator.UpdatedFrom);
 				UpdateViewLabels();
+				return true;
 			}
+			return false;
+		}
+
+		void PreviousVersion()
+		{
+			Navigate(iter => iter.MovePrevious());
 		}
 
 		void NextVersion()
 		{
-			EnsureSaved();
-			if (_currentPage >= Book.Pages.Count)
-				return;
-			if (_currentIterator == null)
-				return;
-			if (_currentIterator.MoveNext())
-			{
-				UpdateTextBox();
-				SetSelection(_currentIterator.UpdatedFrom, _currentIterator.UpdatedTo);
-				ScrollIntoView(_currentIterator.UpdatedFrom);
-				UpdateViewLabels();
-			}
+			Navigate(iter => iter.MoveNext());
 		}
 
 		void PreviousPage()

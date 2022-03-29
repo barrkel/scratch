@@ -19,37 +19,40 @@ namespace Barrkel.ScratchPad
         // Config and initialization
         /****************************************************************************************************/
 
+        private IEnumerable<(ScratchBook,string,int)> FindConfigs(ScratchRoot root, string pattern)
+        {
+            Regex regex = new Regex(pattern);
+            return root.Books.SelectMany(book => 
+                    book.SearchTitles(regex)
+                            .OrderBy(x => x.Item1, StringComparer.OrdinalIgnoreCase)
+                            .Select(x => (book, x.Item1, x.Item2)));
+        }
+
         public void LoadConfig(ScratchRoot root)
         {
             // Load global configs first
-            foreach (var book in root.Books)
+            foreach (var (book, title, index) in FindConfigs(root, @"^\.globalconfig\b.*"))
             {
-                foreach (var (title, index) in book.SearchTitles(new Regex(@"^\.globalconfig\b.*")))
+                var library = ConfigFileLibrary.Load(title, book.Pages[index].Text);
+                try
                 {
-                    var library = ConfigFileLibrary.Load(title, book.Pages[index].Text);
-                    try
-                    {
-                        ((ScratchScope)root.RootScope).Load(library);
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Out(ex.Message);
-                    }
+                    ((ScratchScope)root.RootScope).Load(library);
+                }
+                catch (Exception ex)
+                {
+                    Log.Out(ex.Message);
                 }
             }
-            foreach (var book in root.Books)
+            foreach (var (book, title, index) in FindConfigs(root, @"^\.config\b.*"))
             {
-                foreach (var (title, index) in book.SearchTitles(new Regex(@"^\.config\b.*")))
+                var library = ConfigFileLibrary.Load(title, book.Pages[index].Text);
+                try
                 {
-                    var library = ConfigFileLibrary.Load(title, book.Pages[index].Text);
-                    try
-                    {
-                        ((ScratchScope)book.Scope).Load(library);
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Out(ex.Message);
-                    }
+                    ((ScratchScope)book.Scope).Load(library);
+                }
+                catch (Exception ex)
+                {
+                    Log.Out(ex.Message);
                 }
             }
         }
@@ -458,6 +461,59 @@ namespace Barrkel.ScratchPad
                 UseShellExecute = false
             };
             Process.Start(info);
+        }
+
+        /****************************************************************************************************/
+        // Version history
+        /****************************************************************************************************/
+
+        [TypedAction("goto-next-version")]
+        public void GotoNextVersion(ExecutionContext context, IList<ScratchValue> args)
+        {
+            context.View.Navigate(iter => iter.MoveNext());
+        }
+
+        [TypedAction("goto-previous-version")]
+        public void GotoPreviousVersion(ExecutionContext context, IList<ScratchValue> args)
+        {
+            context.View.Navigate(iter => iter.MovePrevious());
+        }
+
+        [TypedAction("goto-next-major-version", ScratchType.Int32)]
+        public void GotoNextMajorVersion(ExecutionContext context, IList<ScratchValue> args)
+        {
+            TimeSpan minBetween = TimeSpan.FromMinutes(args[0].Int32Value);
+            context.View.Navigate(iter =>
+            {
+                var prev = iter.Stamp;
+                while (iter.MoveNext())
+                {
+                    TimeSpan interval = iter.Stamp - prev;
+                    if (interval >= minBetween)
+                    {
+                        iter.MovePrevious();
+                        return true;
+                    }
+                }
+                return true;
+            });
+        }
+
+        [TypedAction("goto-previous-major-version", ScratchType.Int32)]
+        public void GotoPreviousMajorVersion(ExecutionContext context, IList<ScratchValue> args)
+        {
+            TimeSpan minBetween = TimeSpan.FromMinutes(args[0].Int32Value);
+            context.View.Navigate(iter =>
+            {
+                var next = iter.Stamp;
+                while (iter.MovePrevious())
+                {
+                    TimeSpan interval = next - iter.Stamp;
+                    if (interval >= minBetween)
+                        return true;
+                }
+                return true;
+            });
         }
 
         /****************************************************************************************************/

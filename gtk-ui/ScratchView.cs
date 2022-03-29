@@ -67,6 +67,9 @@ namespace Barrkel.ScratchPad
 		// Show a non-modal snippet window.
 		void LaunchSnippet(ScratchScope settings);
 
+		// Navigate version history.
+		bool Navigate(Func<ScratchIterator, bool> callback);
+
 		// Before invoking cross-page navigation, call this.
 		void EnsureSaved();
 		// Jump to page by index in Book.

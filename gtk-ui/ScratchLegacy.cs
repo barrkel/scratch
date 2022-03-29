@@ -16,7 +16,8 @@ namespace Barrkel.ScratchPad
 
 		private LegacyLibrary() : base("legacy")
 		{
-			// TODO: parse these from a config page
+			// TODO: move these to config somehow
+			// E.g. .globalconfig which can be exported from resource
 			// "Invoking" a string looks up the binding and invokes that, recursively.
 			// Keys are bound by binding their names.
 			// Keys may be bound to an action / scratch function directly,
