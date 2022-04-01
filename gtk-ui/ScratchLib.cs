@@ -326,7 +326,10 @@ namespace Barrkel.ScratchPad
         [TypedAction("get-string-from-to", ScratchType.String, ScratchType.Int32, ScratchType.Int32)]
         public ScratchValue GetStringFromTo(ExecutionContext context, IList<ScratchValue> args)
         {
-            return ScratchValue.From(args[0].StringValue.Substring(args[1].Int32Value, args[1].Int32Value + args[2].Int32Value));
+            int startIndex = args[1].Int32Value;
+            int endIndex = args[2].Int32Value;
+            int length = endIndex - startIndex;
+            return ScratchValue.From(args[0].StringValue.Substring(startIndex, length));
         }
 
         [TypedAction("substring", ScratchType.String, ScratchType.Int32, ScratchType.Int32)]
