@@ -348,6 +348,45 @@ namespace Barrkel.ScratchPad
             return ScratchValue.From(s.Substring(pos, 1));
         }
 
+        [VariadicAction("index-of")]
+        public ScratchValue IndexOf(ExecutionContext context, IList<ScratchValue> args)
+        {
+            // index-of(haystack, needle[, start-index[, end-index]])
+            ValidateArgument("index-of", args, 0, ScratchType.String);
+            ValidateArgument("index-of", args, 1, ScratchType.String);
+            string haystack = args[0].StringValue;
+            string needle = args[1].StringValue;
+            int result;
+            switch (args.Count)
+            {
+                case 2:
+                    result = haystack.IndexOf(needle);
+                    break;
+
+                case 3:
+                {
+                    ValidateArgument("index-of", args, 2, ScratchType.Int32);
+                    int startIndex = args[2].Int32Value;
+                    result = haystack.IndexOf(needle, startIndex);
+                    break;
+                }
+
+                case 4:
+                {
+                    ValidateArgument("index-of", args, 2, ScratchType.Int32);
+                    ValidateArgument("index-of", args, 3, ScratchType.Int32);
+                    int startIndex = args[2].Int32Value;
+                    int endIndex = args[3].Int32Value;
+                    result = haystack.IndexOf(needle, startIndex, endIndex - startIndex);
+                    break;
+                }
+
+                default:
+                    throw new ArgumentException("index-of(haystack, needle[, start-index[, end-index]])");
+            }
+            return result < 0 ? ScratchValue.Null : ScratchValue.From(result);
+        }
+
         // This is also 'filter-lines' because null transformations will be filtered out
         [TypedAction("transform-lines", ScratchType.String, ScratchType.ScratchFunction)]
         public ScratchValue TransformLines(ExecutionContext context, IList<ScratchValue> args)

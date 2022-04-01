@@ -49,6 +49,7 @@
 // gsub(text, regex, replacement: string): string
 // gt
 // indent-block
+// index-of(haystack, needle[, start-index[, end-index]]): int
 // insert-date
 // insert-datetime
 // insert-text(...)
@@ -83,7 +84,7 @@
 // smart-paste
 // sort-lines
 // sub
-// substring
+// substring(string; startIndex, length: int): string
 // to-int(string): int
 // to-str(int): string
 // transform-lines
