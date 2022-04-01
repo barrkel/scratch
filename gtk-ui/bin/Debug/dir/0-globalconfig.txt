@@ -36,6 +36,7 @@
 // get-line-start(text: string, pos: int): int
 // get-page-count(): int
 // get-page-index(): int - get index of current page
+// get-page-title(int): string
 // get-string-from-to(string, int, int): string
 // get-view-pos(): int
 // get-view-selected-text(): string
@@ -54,6 +55,7 @@
 // insert-datetime
 // insert-text(...)
 // is-defined(symbol: string): bool
+// jump-to-page(int) - set page index and move page to end
 // launch-snippet
 // le
 // length(string): int
