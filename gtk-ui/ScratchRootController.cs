@@ -10,6 +10,12 @@ using System.Collections;
 
 namespace Barrkel.ScratchPad
 {
+	public enum ExitIntent
+	{
+		Exit,
+		Restart
+	}
+
 	// Controller for behaviour. UI should receive this and send keystrokes and events to it, along with view callbacks.
 	// The view should be updated via the callbacks.
 	// Much of it is stringly typed for a dynamically bound future.
@@ -21,7 +27,17 @@ namespace Barrkel.ScratchPad
 
 		public Options Options => Root.Options;
 
-        public ScratchScope RootScope { get; }
+		public ScratchScope RootScope { get; }
+
+		public ExitIntent ExitIntent { get; private set; } = ExitIntent.Exit;
+
+		public event EventHandler ExitHandler;
+
+		public void Exit(ExitIntent intent)
+		{
+			ExitIntent = intent;
+			ExitHandler(this, EventArgs.Empty);
+		}
 
 		public ScratchBookController GetControllerFor(ScratchBook book)
 		{

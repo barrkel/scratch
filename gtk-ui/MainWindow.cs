@@ -3,32 +3,31 @@ using Barrkel.ScratchPad;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.RegularExpressions;
 
 namespace Barrkel.GtkScratchPad
 {
 	public class MainWindow : Window
 	{
 		Notebook _notebook;
-		
-		public MainWindow(ScratchRoot root) : base("GTK ScratchPad")
+
+		public MainWindow(ScratchRootController rootController) : base(WindowType.Toplevel)
 		{
-			Root = root;
-			RootController = new ScratchRootController(Root);
+			RootController = rootController;
+			rootController.ExitHandler += (sender, e) => Destroy();
 			InitComponent();
 		}
-		
-		public ScratchRoot Root { get; }
+
 		public ScratchRootController RootController { get; }
 		
 		private void InitComponent()
 		{
+			Title = RootController.RootScope.GetOrDefault("app-title", "GTK ScratchPad");
 			Resize(600, 600);
 
 			List<BookView> views = new List<BookView>();
 			_notebook = new Notebook();
 
-			foreach (var book in Root.Books)
+			foreach (var book in RootController.Root.Books)
 			{
 				ScratchBookController controller = RootController.GetControllerFor(book);
 				BookView view = new BookView(book, controller, this);

@@ -534,14 +534,12 @@ namespace Barrkel.ScratchPad
 
 	public class ConfigFileLibrary : ScratchLibraryBase
 	{
-		public static bool DebugBinding = false;
-
 		private ConfigFileLibrary(string name) : base(name)
 		{
 		}
 
 		// Additively load bindings from text.
-		public static ConfigFileLibrary Load(string name, string source)
+		public static ConfigFileLibrary Load(bool debugBinding, string name, string source)
 		{
 			// TODO: consider error handling
 			// TODO: extend ScratchValue with basic syntax tree, mainly for easier introspection of bindings
@@ -592,7 +590,7 @@ namespace Barrkel.ScratchPad
 					lexer.Eat(ScopeToken.Eq);
 					var value = ParseSettingValue(lexer);
 					result.Bindings.Add(ident, value);
-					if (DebugBinding)
+					if (debugBinding)
 						Log.Out($"Bound {ident} to {value}");
 				}
 

@@ -13,7 +13,12 @@ namespace Barrkel.GtkScratchPad
 		{
 			try
 			{
-				return AppMain(args);
+				while (true)
+				{
+					int result = AppMain(args);
+					if (result >= 0)
+						return result;
+				}
 			}
 			catch (Exception ex)
 			{
@@ -66,11 +71,14 @@ namespace Barrkel.GtkScratchPad
 			ScratchRoot root = new ScratchRoot(options, args[0], rootScope);
 			ScratchLib.Instance.LoadConfig(root);
 
-			MainWindow window = new MainWindow(root);
+			ScratchRootController rootController = new ScratchRootController(root);
+
+			MainWindow window = new MainWindow(rootController);
 			window.ShowAll();
 
 			Application.Run();
-			return 0;
+
+			return rootController.ExitIntent == ExitIntent.Exit ? 0 : -1;
 		}
 	}
 }

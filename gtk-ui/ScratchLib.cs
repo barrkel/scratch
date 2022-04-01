@@ -36,10 +36,12 @@ namespace Barrkel.ScratchPad
             if (!File.Exists(path))
                 File.WriteAllText(path, GtkScratchPad.Resources.globalconfig);
 
+            bool debugBinding = ((ScratchScope)root.RootScope).GetOrDefault("debug-binding", 0) > 0;
+
             // Load global configs first
             foreach (var (book, title, index) in FindConfigs(root, @"^\.globalconfig\b.*"))
             {
-                var library = ConfigFileLibrary.Load(title, book.Pages[index].Text);
+                var library = ConfigFileLibrary.Load(debugBinding, title, book.Pages[index].Text);
                 try
                 {
                     ((ScratchScope)root.RootScope).Load(library);
@@ -51,7 +53,7 @@ namespace Barrkel.ScratchPad
             }
             foreach (var (book, title, index) in FindConfigs(root, @"^\.config\b.*"))
             {
-                var library = ConfigFileLibrary.Load(title, book.Pages[index].Text);
+                var library = ConfigFileLibrary.Load(debugBinding, title, book.Pages[index].Text);
                 try
                 {
                     ((ScratchScope)book.Scope).Load(library);
@@ -79,6 +81,18 @@ namespace Barrkel.ScratchPad
             string path = Path.Combine(root.RootDirectory, "0-globalconfig.txt");
             File.WriteAllText(path, GtkScratchPad.Resources.globalconfig);
             Log.Out($"{path} written.");
+        }
+
+        [TypedAction("restart-app")]
+        public void RestartApp(ExecutionContext context, IList<ScratchValue> args)
+        {
+            context.Controller.RootController.Exit(ExitIntent.Restart);
+        }
+
+        [TypedAction("exit-app")]
+        public void ExitApp(ExecutionContext context, IList<ScratchValue> args)
+        {
+            context.Controller.RootController.Exit(ExitIntent.Exit);
         }
 
         /****************************************************************************************************/
@@ -905,10 +919,15 @@ namespace Barrkel.ScratchPad
             ScratchProgram.DebugStack = args[0].Int32Value > 0;
         }
 
-        [TypedAction("debug-binding", ScratchType.Int32)]
-        public void DebugBinding(ExecutionContext context, IList<ScratchValue> args)
+        [TypedAction("dump-scopes")]
+        public void DumpScopes(ExecutionContext context, IList<ScratchValue> args)
         {
-            ConfigFileLibrary.DebugBinding = args[0].Int32Value > 0;
+            Log.Out("Root scope:");
+            foreach (var (name, value) in context.Controller.RootController.RootScope)
+                Log.Out($"  {name} = {value}");
+            Log.Out("Book scope:");
+            foreach (var (name, value) in context.Controller.Scope)
+                Log.Out($"  {name} = {value}");
         }
 
         /****************************************************************************************************/
