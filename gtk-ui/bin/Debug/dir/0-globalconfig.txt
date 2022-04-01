@@ -34,6 +34,8 @@
 // get-line-end(text: string, pos: int): int
 // get-line-ident(string, position)
 // get-line-start(text: string, pos: int): int
+// get-page-count(): int
+// get-page-index(): int - get index of current page
 // get-string-from-to(string, int, int): string
 // get-view-pos(): int
 // get-view-selected-text(): string
@@ -74,6 +76,7 @@
 // reverse-lines
 // scroll-pos-into-view(pos: int)
 // search-current-page
+// set-page-index(int) - set current page
 // set-view-pos(int)
 // set-view-selected-text(text: string)
 // set-view-selection(from, to: int)
@@ -135,11 +138,27 @@ C-e = goto-eol
 "C-@" = { insert-header('*', 90) }
 "C-#" = { insert-header('-', 80) }
 
-
+M-Left = goto-previous-page
+M-PgUp = goto-previous-page
+M-Right = goto-next-page
+M-PgDn = goto-next-page
 
 #-------------------------------------------------------------------------------
 # Commands
 #-------------------------------------------------------------------------------
+
+goto-next-page = {
+  target := add(get-page-index(), 1)
+  if eq(target, get-page-count()) {
+    add-new-page()
+  } else {
+    set-page-index(target)
+  }
+}
+
+goto-previous-page = {
+  set-page-index(sub(get-page-index(), 1))
+}
 
 create-snippet-from-selection = {
   sel := get-view-selected-text()

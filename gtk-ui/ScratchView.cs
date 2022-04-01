@@ -43,7 +43,7 @@ namespace Barrkel.ScratchPad
 		void ScrollIntoView(int position);
 
 		// 0-based index of current Page in Book; may be equal to Book.Pages.Count for new page.
-		int CurrentPageIndex { get; }
+		int CurrentPageIndex { get; set; }
 		// Current text in editor, which may be ahead of model (lazy saves).
 		string CurrentText { get; }
 

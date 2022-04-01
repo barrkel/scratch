@@ -643,6 +643,8 @@ namespace Barrkel.ScratchPad
 			// If cursor isn't exactly at the end of a completion, we don't resume; we try from scratch.
 			// Completion symbols come from all words ([A-Za-z0-9_-]+) in the document.
 			var page = GetPage(context.View.Book, context.View.CurrentPageIndex);
+			if (page == null)
+				return;
 			string text = context.View.CurrentText;
 			var state = page.GetViewState(context.View, PageViewState.Create);
 			var (currentStart, currentEnd) = state.CurrentCompletion.GetValueOrDefault();

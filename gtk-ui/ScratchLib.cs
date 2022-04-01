@@ -622,6 +622,24 @@ namespace Barrkel.ScratchPad
             context.View.EnsureSaved();
         }
 
+        [TypedAction("get-page-index")]
+        public ScratchValue GetPageIndex(ExecutionContext context, IList<ScratchValue> args)
+        {
+            return ScratchValue.From(context.View.CurrentPageIndex);
+        }
+
+        [TypedAction("set-page-index", ScratchType.Int32)]
+        public void SetPageIndex(ExecutionContext context, IList<ScratchValue> args)
+        {
+            context.View.CurrentPageIndex = args[0].Int32Value;
+        }
+
+        [TypedAction("get-page-count")]
+        public ScratchValue GetPageCount(ExecutionContext context, IList<ScratchValue> args)
+        {
+            return ScratchValue.From(context.Controller.Book.Pages.Count);
+        }
+
         // Gets the position of the character which starts the line.
         private int GetLineStart(string text, int position)
         {

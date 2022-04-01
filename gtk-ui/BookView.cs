@@ -412,16 +412,6 @@ namespace Barrkel.GtkScratchPad
 							NextVersion();
 							break;
 						
-						case Gdk.Key.Page_Up: // M-PgUp
-						case Gdk.Key.Left: // M-Left
-							PreviousPage();
-							break;
-						
-						case Gdk.Key.Page_Down: // M-PgDn
-						case Gdk.Key.Right: // M-Right
-							NextPage();
-							break;
-
 						default:
 							return;
 					}
@@ -490,28 +480,6 @@ namespace Barrkel.GtkScratchPad
 		void NextVersion()
 		{
 			Navigate(iter => iter.MoveNext());
-		}
-
-		void PreviousPage()
-		{
-			_currentIterator = null;
-			if (_currentPage > 0)
-			{
-				ExitPage();
-				--_currentPage;
-				EnterPage();
-			}
-		}
-
-		void NextPage()
-		{
-			_currentIterator = null;
-			if (_currentPage < Book.Pages.Count && !Book.Pages[_currentPage].IsNew)
-			{
-				ExitPage();
-				++_currentPage;
-				EnterPage();
-			}
 		}
 
 		public void JumpToPage(int pageIndex)
@@ -606,15 +574,14 @@ namespace Barrkel.GtkScratchPad
 
 		public int CurrentPageIndex
 		{
-			get
+			get => _currentPage;
+			set
 			{
-				// Ensure that any attempt by controller to get page for this view will succeed.
-				if (_currentPage >= Book.Pages.Count && _textView.Buffer.Text != "")
-				{
-					Book.AddPage();
-					UpdateViewLabels();
-				}
-				return _currentPage;
+				if (value == _currentPage || value >= Book.Pages.Count || value < 0)
+					return;
+				ExitPage();
+				_currentPage = value;
+				EnterPage();
 			}
 		}
 
