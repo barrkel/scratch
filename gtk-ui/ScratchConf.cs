@@ -363,6 +363,16 @@ namespace Barrkel.ScratchPad
 				}
 			}
 
+			public bool LastOpIsRet
+			{
+				get
+				{
+					if (_ops.Count == 0)
+						return false;
+					return _ops[_ops.Count - 1].Operation == Operation.Ret;
+				}
+			}
+
 			public void AddOp(Operation op)
 			{
 				_ops.Add(new Op(op));
@@ -667,7 +677,8 @@ namespace Barrkel.ScratchPad
 
 			CompileExprList(w, lexer);
 
-			w.AddOp(ScratchProgram.Operation.Ret);
+			if (!w.LastOpIsRet)
+				w.AddOp(ScratchProgram.Operation.Ret);
 			return new ScratchFunction(w.ToProgram(), paramList);
 		}
 
@@ -727,8 +738,9 @@ namespace Barrkel.ScratchPad
 
 				case ScopeToken.Return:
 					// return ::= 'return' [ '(' orExpr ')' ] ;
+					int startLinum = lexer.LineNum;
 					lexer.NextToken();
-					if (lexer.CurrToken == ScopeToken.LParen)
+					if (AcceptControlFlowArgument(lexer, startLinum))
 						CompileOrExpr(w, lexer);
 					else
 						w.AddOp(ScratchProgram.Operation.Push, ScratchValue.Null);
@@ -738,6 +750,21 @@ namespace Barrkel.ScratchPad
 				default:
 					CompileOrExpr(w, lexer);
 					break;
+			}
+		}
+
+		private static bool AcceptControlFlowArgument(ScopeLexer lexer, int startLinum)
+		{
+			switch (lexer.CurrToken)
+			{
+				case ScopeToken.RBrace:
+					return false;
+
+				case ScopeToken.LParen:
+					return true;
+
+				default:
+					return lexer.LineNum == startLinum;
 			}
 		}
 
