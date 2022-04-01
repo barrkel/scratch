@@ -95,6 +95,7 @@ namespace Barrkel.GtkScratchPad
 			result.Add(Gdk.Key.greater, ">");
 			result.Add(Gdk.Key.colon, ":");
 			result.Add(Gdk.Key.semicolon, ";");
+			result.Add(Gdk.Key.question, "?");
 			result.Add(Gdk.Key.Escape, "Esc");
 			result.Add(Gdk.Key.asciitilde, "~");
 			result.Add(Gdk.Key.Page_Up, "PgUp");
