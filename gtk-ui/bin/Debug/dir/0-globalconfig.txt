@@ -119,7 +119,7 @@ C-S-F4 = restart-app
 
 "C-M-?" = dump-scopes
 
-debug-keys = 1
+debug-keys = nil
 
 C-Up = goto-prev-para
 C-Down = goto-next-para
@@ -141,6 +141,8 @@ C-e = goto-eol
 "C-@" = { insert-header('*', 90) }
 "C-#" = { insert-header('-', 80) }
 
+M-Return = jump-title-link
+
 M-Left = goto-previous-page
 M-PgUp = goto-previous-page
 M-Right = goto-next-page
@@ -149,6 +151,31 @@ M-PgDn = goto-next-page
 #-------------------------------------------------------------------------------
 # Commands
 #-------------------------------------------------------------------------------
+
+find-page-index = { |title|
+  index := get-page-count()
+  while ge(index, 0) {
+    if eq(title, get-page-title(index)) {
+      return index
+    }
+    index = sub(index, 1)
+  }
+  return nil
+}
+
+jump-to-title = { |title|
+  index := find-page-index(title)
+  if !index { return }
+  jump-to-page(index)
+}
+
+jump-title-link = {
+  line := get-current-line-text()
+  sigil := index-of(line, '>>> ')
+  if !sigil { return }
+  title := get-string-from-to(line, add(sigil, 4), length(line))
+  jump-to-title(title)
+}
 
 goto-next-page = {
   target := add(get-page-index(), 1)
