@@ -31,7 +31,6 @@ namespace Barrkel.ScratchPad
 			Bind("M-/", new ScratchValue("complete"));
 			Bind("C-a", new ScratchValue("goto-sol"));
 			Bind("C-e", new ScratchValue("goto-eol"));
-			Bind("M-o", new ScratchValue("occur"));
 			Bind("F12", new ScratchValue("navigate-title"));
 			Bind("F11", new ScratchValue("navigate-contents"));
 			Bind("C-t", new ScratchValue("navigate-todo"));
@@ -390,19 +389,6 @@ namespace Barrkel.ScratchPad
 			return pattern.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
 				.Select(x => parsePart(x))
 				.ToList();
-		}
-
-		[TypedAction("occur")]
-		public void Occur(ExecutionContext context, IList<ScratchValue> args)
-		{
-			var lines = GetNonEmptyLines(context.View.CurrentText).ToList();
-			if (context.View.RunSearch(pattern => FindMatchingLocations(lines, ParseRegexList(pattern, RegexOptions.Singleline)),
-				out var pair))
-			{
-				var (pos, len) = pair;
-				context.View.ScrollIntoView(pos);
-				context.View.Selection = (pos, pos + len);
-			}
 		}
 
 		[TypedAction("navigate-title")]

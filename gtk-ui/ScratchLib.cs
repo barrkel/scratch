@@ -105,6 +105,7 @@ namespace Barrkel.ScratchPad
             return ScratchValue.From(context.Scope.TryLookup(args[0].StringValue, out _));
         }
 
+        // This doesn't work very well because we don't distinguish between functions and commands.
         [TypedAction("call-action")]
         public void CallAction(ExecutionContext context, IList<ScratchValue> args)
         {
@@ -116,7 +117,7 @@ namespace Barrkel.ScratchPad
                 {
                     regexList = ParseRegexList(pattern, RegexOptions.None);
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
                     yield break;
                 }
@@ -860,18 +861,9 @@ namespace Barrkel.ScratchPad
                     continue;
                 }
                 count += matches.Count;
-                // if multiple matches in a line, break them out
-                // if a single match, keep as is
-                string prefix = "";
-                if (matches.Count > 1)
-                {
-                    prefix = "   ";
-                    yield return (line, (lineOfs + matches[0].Start, matches[0].Length));
-                }
-                foreach (SimpleMatch match in matches)
-                {
-                    yield return (prefix + Contextualize(line, match), (lineOfs + match.Start, match.Length));
-                }
+                int startPos = matches[0].Start;
+                int endPos = matches[matches.Count - 1].End;
+                yield return (MarkUpMatches(line, matches), (lineOfs + startPos, endPos - startPos));
             }
         }
 
@@ -931,31 +923,26 @@ namespace Barrkel.ScratchPad
                 .ToList();
         }
 
-        // Given a line and a match, add prefix and postfix text as necessary, and mark up match with [].
-        // This logic is sufficiently UI-specific that it should be factored out somehow.
-        static string Contextualize(string line, SimpleMatch match, int contextLength = DefaultContextLength)
+        // Wrap matches in [] inside line.
+        static string MarkUpMatches(string line, List<SimpleMatch> matches)
         {
+            if (matches.Count == 0)
+                return line;
+
             StringBuilder result = new StringBuilder();
-            // ... preamble [match] postamble ...
-            if (match.Start > contextLength)
+            int currPos = 0;
+            foreach (var match in matches)
             {
-                result.Append("...");
-                result.Append(line.Substring(match.Start - contextLength + 3, contextLength - 3));
+                if (match.Start > currPos)
+                    result.Append(line.Substring(currPos, match.Start - currPos));
+                result.Append("[");
+                result.Append(line.Substring(match.Start, match.Length));
+                result.Append("]");
+                currPos = match.End;
             }
-            else
-            {
-                result.Append(line.Substring(0, match.Start));
-            }
-            result.Append('[').Append(match.Value).Append(']');
-            if (match.End + contextLength < line.Length)
-            {
-                result.Append(line.Substring(match.End, contextLength - 3));
-                result.Append("...");
-            }
-            else
-            {
-                result.Append(line.Substring(match.End));
-            }
+            if (currPos < line.Length)
+                result.Append(line.Substring(currPos));
+
             return result.ToString();
         }
 

@@ -79,7 +79,7 @@
 // restart-app - Tear down UI, reload all books and recreate UI.
 // reverse-lines
 // scroll-pos-into-view(pos: int)
-// search-current-page
+// search-current-page(prefilter: string) - occur but on lines matching regex
 // set-page-index(int) - set current page
 // set-view-pos(int)
 // set-view-selected-text(text: string)
@@ -151,9 +151,15 @@ M-PgDn = goto-next-page
 
 M-x = call-action
 
+M-o = occur
+
 #-------------------------------------------------------------------------------
 # Commands
 #-------------------------------------------------------------------------------
+
+occur = {
+  search-current-page('')
+}
 
 find-page-index = { |title|
   index := get-page-count()
