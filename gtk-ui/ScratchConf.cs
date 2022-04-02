@@ -209,6 +209,10 @@ namespace Barrkel.ScratchPad
 		public bool IsFalse => Type == ScratchType.Null;
 		public object ObjectValue => _value;
 
+		public bool IsInvokable =>
+			Type == ScratchType.Action ||
+			(Type == ScratchType.ScratchFunction && FunctionValue.Parameters.Count == 0);
+
 		public ScratchValue Invoke(string name, ExecutionContext context, params ScratchValue[] args)
 		{
 			return Invoke(name, context, (IList<ScratchValue>)args);

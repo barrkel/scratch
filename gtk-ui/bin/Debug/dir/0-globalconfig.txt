@@ -12,6 +12,7 @@
 // add-indent(text, indent: string): string
 // add-new-page
 // autoindent-return
+// call-action - invoke action via search UI
 // char-at(string, int): string
 // complete
 // concat(...): string
@@ -147,6 +148,8 @@ M-Left = goto-previous-page
 M-PgUp = goto-previous-page
 M-Right = goto-next-page
 M-PgDn = goto-next-page
+
+M-x = call-action
 
 #-------------------------------------------------------------------------------
 # Commands

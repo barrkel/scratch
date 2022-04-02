@@ -105,6 +105,47 @@ namespace Barrkel.ScratchPad
             return ScratchValue.From(context.Scope.TryLookup(args[0].StringValue, out _));
         }
 
+        [TypedAction("call-action")]
+        public void CallAction(ExecutionContext context, IList<ScratchValue> args)
+        {
+            IEnumerable<(string, (string, ScratchValue))> findInvokables(string pattern)
+            {
+                int count = 0;
+                List<Regex> regexList;
+                try
+                {
+                    regexList = ParseRegexList(pattern, RegexOptions.None);
+                }
+                catch (Exception ex)
+                {
+                    yield break;
+                }
+                for (ScratchScope scope = context.Scope; scope != null; scope = scope.Parent)
+                { 
+                    {
+                        foreach (var (name, value) in scope)
+                        {
+                            if (!value.IsInvokable)
+                                continue;
+                            var matches = MatchRegexList(regexList, name);
+                            if (regexList.Count == 0 || matches.Count > 0)
+                            {
+                                yield return (name, (name, value));
+                                ++count;
+                                if (count == 100)
+                                    break;
+                            }
+                        }
+                    }
+                }
+            }
+            if (context.View.RunSearch(findInvokables, out var tuple))
+            {
+                var (name, invokable) = tuple;
+                invokable.Invoke(name, context, ScratchValue.EmptyList);
+            }
+        }
+
         /****************************************************************************************************/
         // Operators
         /****************************************************************************************************/
