@@ -50,6 +50,7 @@
 // gsub
 // gsub(text, regex, replacement: string): string
 // gt
+// incremental-search(source, prefilter: (regex -> regex), transform: (string -> string))
 // indent-block
 // index-of(haystack, needle[, start-index[, end-index]]): int
 // insert-date

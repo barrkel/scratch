@@ -484,7 +484,7 @@ namespace Barrkel.GtkScratchPad
 
 		public void JumpToPage(int pageIndex)
 		{
-			if (pageIndex < 0 || pageIndex >= Book.Pages.Count)
+			if (pageIndex < 0 || pageIndex >= Book.Pages.Count || pageIndex == _currentPage)
 				return;
 
 			ExitPage();

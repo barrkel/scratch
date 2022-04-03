@@ -818,6 +818,74 @@ namespace Barrkel.ScratchPad
 
         private const int DefaultContextLength = 40;
 
+        class SearchLine
+        {
+            public int PageIndex { get; set; }
+            public int LineOffset { get; set; }
+            public string Line { get; set; }
+        }
+
+        IEnumerable<SearchLine> GetPageLines(int pageIndex, string text)
+        {
+            return GetNonEmptyLines(text).Select(pair =>
+                    new SearchLine { Line = pair.Item2, LineOffset = pair.Item1, PageIndex = pageIndex });
+        }
+
+        IEnumerable<SearchLine> GetPageTitles(ScratchBook book)
+        {
+            return book.Pages.Select((page, index) =>
+                    new SearchLine { Line = page.Title, LineOffset = 0, PageIndex = index });
+        }
+
+        IEnumerable<SearchLine> GetBookLines(ScratchBook book)
+        {
+            return book.Pages.SelectMany((page, index) => GetPageLines(index, page.Text));
+        }
+
+        IEnumerable<SearchLine> GetSearchSource(ExecutionContext context, string sourceName)
+        {
+            switch (sourceName)
+            {
+                case "current":
+                    return GetPageLines(context.View.CurrentPageIndex, context.View.CurrentText);
+
+                case "titles":
+                    return GetPageTitles(context.View.Book);
+
+                case "book-lines":
+                    return GetBookLines(context.View.Book);
+
+                default:
+                    throw new ArgumentException("Expected source to be current, titles or book-lines");
+            }
+        }
+
+        // (data-source: string, prefilter: (pattern -> pattern), transform: (string -> string))
+        [TypedAction("incremental-search", ScratchType.String, ScratchType.ScratchFunction, ScratchType.ScratchFunction)]
+        public void IncrementalSearch(ExecutionContext context, IList<ScratchValue> args)
+        {
+            IEnumerable<SearchLine> source = GetSearchSource(context, args[0].StringValue);
+            ScratchValue prefilterFunc = args[1];
+            ScratchValue transformFunc = args[2];
+
+            IEnumerable<(string,SearchLine)> searchFunc(string pattern)
+            {
+                Regex prefilter = new Regex(prefilterFunc.Invoke("prefilter", context, ScratchValue.From(pattern)).StringValue,
+                    RegexOptions.Compiled);
+
+                foreach (var item in source)
+                    if (prefilter.IsMatch(item.Line))
+                        yield return (transformFunc.Invoke("transform", context, ScratchValue.From(item.Line)).StringValue, item);
+            }
+
+            if (context.View.RunSearch(pattern => searchFunc(pattern).Take(100), out var result))
+            {
+                context.View.JumpToPage(result.PageIndex);
+                context.View.ScrollIntoView(result.LineOffset);
+                context.View.Selection = (result.LineOffset, result.LineOffset + result.Line.Length);
+            }
+        }
+
         // Arg is regex to prefilter for.
         // TODO: transform output
         // TOOD: clean up context display
